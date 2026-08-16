@@ -1,0 +1,6 @@
+{
+  "name": "AeroTurn - Airport Ground Ops",
+  "description": "Professional Airport Ground Operations & Aircraft Turnaround Management System with offline-first event sync, ramp milestones, GPS tracking, baggage, catering, fueling, maintenance, boarding, delay management, and live airport map.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
