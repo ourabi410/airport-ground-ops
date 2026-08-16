@@ -1,20 +1,59 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# ✈️ AeroTurn - Airport Ground Turnaround & Operations Control
 
-# Run and deploy your AI Studio app
+A next-generation Airport Ground Handling and Turnaround Management System built with **Laravel 12**, **React 19**, **Vite**, **Tailwind CSS**, and **Google Gemini AI**.
 
-This contains everything you need to run your app locally.
+---
 
-View your app in AI Studio: https://ai.studio/apps/a382c6cc-cbd6-44f0-98a8-f18c75260062
+## 🚀 Quick Start
 
-## Run Locally
+### 1. Prerequisites
+- **PHP 8.2+** with Composer
+- **Node.js 18+** with npm
 
-**Prerequisites:**  Node.js
+### 2. Installation
+```bash
+# Clone the repository (if not already cloned)
+git clone https://github.com/ourabi410/airport-ground-ops.git
+cd airport-ground-ops
 
+# Install PHP dependencies
+composer install
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+# Install Frontend dependencies
+npm install
+
+# Setup environment variables
+cp .env.example .env
+php artisan key:generate
+```
+
+### 3. Running the Application
+
+In two terminal windows (or using `composer dev`):
+
+**Terminal 1 (Backend - Laravel):**
+```bash
+php artisan serve
+```
+
+**Terminal 2 (Frontend - React / Vite):**
+```bash
+npm run dev
+```
+
+Open your browser at **`http://localhost:8000`** (or the port displayed by `php artisan serve`).
+
+---
+
+## 🛠️ Tech Stack & Features
+
+- **Backend**: Laravel 12 API with REST endpoints, idempotent offline batch synchronization, audit logs, and Gemini AI turnaround analysis.
+- **Frontend**: React 19, TypeScript, Tailwind CSS, Lucide Icons, Recharts, Framer Motion.
+- **Vite Asset Pipeline**: Integrated with `@vitejs/plugin-react` and `laravel-vite-plugin`.
+- **Features**:
+  - Live turnaround dashboard & Gantt schedule timeline
+  - Zebra barcode & baggage RFID scanner simulation
+  - Mobile Ramp Agent quick mode
+  - Geofenced Apron radar map
+  - Delay prediction & AI advisory
+  - Real-time offline IndexedDB queue & authoritative server sync
