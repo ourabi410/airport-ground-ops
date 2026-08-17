@@ -17,6 +17,7 @@ import {
   TaskPriority
 } from '../types';
 import { soundManager } from '../utils/audio';
+import { api } from '../services/api';
 
 // RBAC Permissions Mapping
 export const ROLE_PERMISSIONS: Record<UserRole, UserPermission> = {
@@ -1117,7 +1118,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [sessionLogs] = useState<UserSessionLog[]>(initialSessionLogs);
 
-  // Sync to local storage
+  // Load dynamic data from Laravel Backend API
+  useEffect(() => {
+    let isMounted = true;
+    const fetchBackendData = async () => {
+      try {
+        const [uRes, cRes, fRes, bRes, dRes, tRes, mRes, aRes, sRes] = await Promise.allSettled([
+          api.users.getAll(),
+          api.companies.getAll(),
+          api.flights.getAll(),
+          api.baggages.getAll(),
+          api.dollies.getAll(),
+          api.tasks.getAll(),
+          api.milestones.getAll(),
+          api.auditLogs.getAll(),
+          api.sessions.getAll(),
+        ]);
+
+        if (isMounted) {
+          if (uRes.status === 'fulfilled' && Array.isArray(uRes.value.data) && uRes.value.data.length > 0) {
+            setUsers(uRes.value.data);
+            setCurrentUserState(prev => uRes.value.data.find(u => u.id === prev?.id) || uRes.value.data[0]);
+          }
+          if (cRes.status === 'fulfilled' && Array.isArray(cRes.value.data) && cRes.value.data.length > 0) {
+            setCompanies(cRes.value.data);
+          }
+          if (fRes.status === 'fulfilled' && Array.isArray(fRes.value.data) && fRes.value.data.length > 0) {
+            setFlights(fRes.value.data);
+            setSelectedFlightId(prev => fRes.value.data.some(f => f.id === prev) ? prev : fRes.value.data[0].id);
+          }
+          if (bRes.status === 'fulfilled' && Array.isArray(bRes.value.data) && bRes.value.data.length > 0) {
+            setBaggage(bRes.value.data);
+          }
+          if (dRes.status === 'fulfilled' && Array.isArray(dRes.value.data) && dRes.value.data.length > 0) {
+            setDollies(dRes.value.data);
+          }
+          if (tRes.status === 'fulfilled' && Array.isArray(tRes.value.data) && tRes.value.data.length > 0) {
+            setTasks(tRes.value.data);
+          }
+          if (mRes.status === 'fulfilled' && Array.isArray(mRes.value.data) && mRes.value.data.length > 0) {
+            setTurnaroundMilestones(mRes.value.data);
+          }
+          if (aRes.status === 'fulfilled' && Array.isArray(aRes.value.data) && aRes.value.data.length > 0) {
+            setAuditLogs(aRes.value.data);
+          }
+        }
+      } catch (e) {
+        console.warn('Backend dynamic sync notice:', e);
+      }
+    };
+
+    fetchBackendData();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Sync to local storage for offline resilience
   useEffect(() => {
     localStorage.setItem('sas_users', JSON.stringify(users));
   }, [users]);
@@ -1193,11 +1248,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setAuditLogs(prev => [newLog, ...prev]);
+    api.auditLogs.create(newLog).catch(() => {});
   };
 
   const setCurrentUser = (user: User) => {
     setCurrentUserState(user);
     logActivity('Security', 'AUTH_LOGIN', user.badgeId, `User switched session to ${user.name} (${user.role})`, 'info');
+    api.auth.switchUser(user.id).catch(() => {});
   };
 
   // Flight CRUD
@@ -1217,6 +1274,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedFlightId(newId);
 
     logActivity('Flight', 'CREATE', newFlight.flightNbr, `New flight ${newFlight.flightNbr} registered for ${newFlight.companyName} at Gate ${newFlight.gateNbr}`, 'info');
+    api.flights.create(newFlight).catch(() => {});
     return newFlight;
   };
 
@@ -1229,6 +1287,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return f;
     }));
+    api.flights.update(id, updates).catch(() => {});
   };
 
   const lockFlight = (id: string) => {
@@ -1239,6 +1298,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return f;
     }));
+    api.flights.lock(id, true).catch(() => {});
   };
 
   const unlockFlight = (id: string) => {
@@ -1249,6 +1309,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return f;
     }));
+    api.flights.lock(id, false).catch(() => {});
   };
 
   const deleteFlight = (id: string) => {
@@ -1260,6 +1321,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const remaining = flights.filter(f => f.id !== id);
         if (remaining.length > 0) setSelectedFlightId(remaining[0].id);
       }
+      api.flights.delete(id).catch(() => {});
     }
   };
 
@@ -1286,6 +1348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const flight = flights.find(f => f.id === flightId);
     logActivity('Flight', 'COMMENT_ADD', flight?.flightNbr || flightId, `Comment added [${category}]: "${message.slice(0, 60)}..."`, category === 'discrepancy' ? 'warning' : 'info');
+    api.flights.addComment(flightId, newComment).catch(() => {});
   };
 
   // Step 1: Check-in / Sorting Area Scan
@@ -1335,6 +1398,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
 
       logActivity('Baggage', 'SCAN_STEP1', cleanTag, `Step 1: Bag ${cleanTag} verified at ${sortingZone}${dollyId ? ` (Dolly ${dollyId})` : ''}`, 'info', existingBag.status, updatedBag.status);
+      api.baggages.scanSorting({ tagNumber: cleanTag, zone: sortingZone, userName: currentUser.name, userId: currentUser.id, dollyId }).catch(() => {});
       return { success: true, message: `Tag ${cleanTag} scanned & sorted successfully`, bag: updatedBag };
     } else {
       // New tag discovered during sorting
@@ -1372,6 +1436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
 
       logActivity('Baggage', 'SCAN_STEP1', cleanTag, `Step 1: New Tag ${cleanTag} registered & sorted for Flight ${flightNbr}`, 'info', 'UNREGISTERED', 'SORTED');
+      api.baggages.create(newBag).catch(() => {});
       return { success: true, message: `New tag ${cleanTag} created and sorted into ${flightNbr}`, bag: newBag };
     }
   };
@@ -1447,6 +1512,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     logActivity('Baggage', 'SCAN_STEP2', cleanTag, `Step 2 Verified: Bag ${cleanTag} (${existingBag.passengerName}) loaded into ${holdLocation}`, 'success', existingBag.status, 'LOADED');
+    api.baggages.scanLoading({ tagNumber: cleanTag, zone: `Stand Hold Door (${holdLocation})`, userName: currentUser.name, userId: currentUser.id, holdLocation }).catch(() => {});
     return { success: true, message: `Tag ${cleanTag} verified & stowed in ${holdLocation}`, bag: updatedBag };
   };
 
@@ -1472,6 +1538,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           status: isDiscrepancy ? ('DISCREPANCY' as const) : b.status
         };
         logActivity('Baggage', 'COMMENT_ADD', b.tagNumber, `Operator comment added: "${text}"`, isDiscrepancy ? 'warning' : 'info');
+        api.baggages.update(b.id, updated).catch(() => {});
         return updated;
       }
       return b;
@@ -1482,6 +1549,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBaggage(prev => prev.map(b => {
       if (b.id === bagId) {
         logActivity('Baggage', 'UPDATE', b.tagNumber, `Discrepancy resolved for bag ${b.tagNumber}`, 'success', b.status, 'SORTED');
+        api.baggages.update(b.id, { status: 'SORTED', alerts: [] }).catch(() => {});
         return { ...b, status: 'SORTED', alerts: [] };
       }
       return b;
@@ -1492,10 +1560,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBaggage(prev => prev.map(b => {
       if (b.id === bagId) {
         logActivity('Baggage', 'UPDATE', b.tagNumber, `Bag marked OFFLOADED (${reason})`, 'warning', b.status, 'OFFLOADED');
-        return {
+        const updated = {
           ...b,
-          status: 'OFFLOADED',
-          holdLocation: 'Unassigned',
+          status: 'OFFLOADED' as const,
+          holdLocation: 'Unassigned' as const,
           comments: [
             ...b.comments,
             {
@@ -1509,6 +1577,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           ]
         };
+        api.baggages.update(b.id, updated).catch(() => {});
+        return updated;
       }
       return b;
     }));
@@ -1551,6 +1621,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setCompanies(prev => [...prev, newComp]);
     logActivity('Company', 'CREATE', newComp.name, `New airline partner ${newComp.name} (${newComp.abbreviation}) added`, 'info');
+    api.companies.create(newComp).catch(() => {});
   };
 
   const updateCompany = (id: string, updates: Partial<Company>) => {
@@ -1561,6 +1632,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return c;
     }));
+    api.companies.update(id, updates).catch(() => {});
   };
 
   const deleteCompany = (id: string) => {
@@ -1568,6 +1640,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (comp) {
       logActivity('Company', 'DELETE', comp.name, `Company ${comp.name} removed from registry`, 'warning');
       setCompanies(prev => prev.filter(c => c.id !== id));
+      api.companies.delete(id).catch(() => {});
     }
   };
 
@@ -1583,6 +1656,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setDollies(prev => [...prev, newDolly]);
     logActivity('Dolly', 'CREATE', newId, `New Dolly ${newId} (${newDolly.type}) registered in zone ${newDolly.zone}`, 'info');
+    api.dollies.create(newDolly).catch(() => {});
   };
 
   const updateDolly = (id: string, updates: Partial<Dolly>) => {
@@ -1593,6 +1667,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return d;
     }));
+    api.dollies.update(id, updates).catch(() => {});
   };
 
   const assignDollyFlight = (dollyId: string, flightNbr?: string) => {
@@ -1603,6 +1678,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return d;
     }));
+    api.dollies.update(dollyId, { assignedFlightNbr: flightNbr, status: flightNbr ? 'Loading' : 'Available' }).catch(() => {});
   };
 
   // User CRUD
@@ -1615,6 +1691,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setUsers(prev => [...prev, newUser]);
     logActivity('Users', 'CREATE', newUser.badgeId, `New user ${newUser.name} created with role ${newUser.role}`, 'info');
+    api.users.create(newUser).catch(() => {});
   };
 
   const updateUser = (id: string, updates: Partial<User>) => {
@@ -1625,6 +1702,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return u;
     }));
+    api.users.update(id, updates).catch(() => {});
   };
 
   // Tasks
@@ -1635,6 +1713,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTasks(prev => [newTask, ...prev]);
     logActivity('Tasks', 'CREATE', newTask.flightNbr, `New task created: "${newTask.taskTitle}" for Flight ${newTask.flightNbr}`, 'info');
+    api.tasks.create(newTask).catch(() => {});
   };
 
   const updateTaskStatus = (taskId: string, status: FlightTaskItem['status']) => {
@@ -1646,6 +1725,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return t;
     }));
+    api.tasks.update(taskId, { status }).catch(() => {});
   };
 
   const toggleTaskChecklist = (taskId: string, checklistId: string) => {
@@ -1662,6 +1742,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return t;
     }));
+    api.tasks.toggleItem(taskId, checklistId).catch(() => {});
   };
 
   // Turnaround Milestone Actions
@@ -1705,6 +1786,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             m.status,
             'COMPLETED'
           );
+          api.milestones.complete(milestoneId, {
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userRole: currentUser.role,
+            gpsLatitude: recordedLat,
+            gpsLongitude: recordedLng,
+            gpsAccuracy: 1.8,
+            notes: customNotes
+          }).catch(() => {});
         } else {
           logActivity(
             'Tasks',
@@ -1715,6 +1805,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             m.status,
             status
           );
+          api.milestones.update(milestoneId, { status, notes: customNotes }).catch(() => {});
         }
 
         return updated;
@@ -1739,6 +1830,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return m;
     }));
+    api.milestones.update(milestoneId, { completedByUserId: matchedUser.id, completedByUserName: matchedUser.name, completedByUserRole: matchedUser.role }).catch(() => {});
   };
 
   const assignMultipleMilestonesToAgent = (flightNbr: string, milestoneCodes: string[], userId: string) => {
@@ -1747,6 +1839,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setTurnaroundMilestones(prev => prev.map(m => {
       if (m.flightNbr === flightNbr && milestoneCodes.includes(m.code)) {
+        api.milestones.update(m.id, { completedByUserId: matchedUser.id, completedByUserName: matchedUser.name, completedByUserRole: matchedUser.role }).catch(() => {});
         return {
           ...m,
           completedByUserId: matchedUser.id,
@@ -1798,6 +1891,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return f;
     }));
+    api.flights.update(targetFlight.id, {
+      assignedRampAgent: targetUser.name,
+      assignedRampAgentBadge: targetUser.badgeId,
+    }).catch(() => {});
 
     // 3. Update milestones
     const milestoneCodes = params.milestoneCodes && params.milestoneCodes.length > 0
