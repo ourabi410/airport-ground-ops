@@ -1,78 +1,116 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React from 'react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
-import { OperationsDashboard } from './components/dashboard/OperationsDashboard';
-import { FlightDetailPage } from './components/flights/FlightDetailPage';
-import { RampQuickMode } from './components/agent-mode/RampQuickMode';
-import { BaggageModule } from './components/baggage/BaggageModule';
-import { PassengerBoardingModule } from './components/passengers/PassengerBoardingModule';
-import { GroundServicesModule } from './components/ground-services/GroundServicesModule';
-import { IncidentModule } from './components/incidents/IncidentModule';
-import { DelayManagementModule } from './components/delays/DelayManagementModule';
-import { AirportMap } from './components/map/AirportMap';
-import { KpiDashboard } from './components/kpis/KpiDashboard';
-import { SyncCenter } from './components/sync/SyncCenter';
-import { AuditTrailView } from './components/audit/AuditTrailView';
-import { ReportsView } from './components/reports/ReportsView';
-import { TurnaroundAiAssistant } from './components/ai/TurnaroundAiAssistant';
-import { UserGuideView } from './components/guide/UserGuideView';
-import { QuickEventModal } from './components/events/QuickEventModal';
-import { Footer } from './components/layout/Footer';
+import { OverviewDashboard } from './components/dashboard/OverviewDashboard';
+import { FlightManagementView } from './components/flights/FlightManagementView';
+import { BaggageWorkflowView } from './components/baggage/BaggageWorkflowView';
+import { TaskManagementView } from './components/tasks/TaskManagementView';
+import { CompanyManagementView } from './components/companies/CompanyManagementView';
+import { DollyManagementView } from './components/dolly/DollyManagementView';
+import { UserManagementView } from './components/users/UserManagementView';
+import { AuditLogsView } from './components/logs/AuditLogsView';
+import { RampAgentFieldModeView } from './components/ramp/RampAgentFieldModeView';
+import { AccessRestrictedNotice } from './components/common/AccessRestrictedNotice';
+import { ZebraScannerModal } from './components/baggage/ZebraScannerModal';
 
-const AppContent: React.FC = () => {
-  const { activeTab } = useApp();
+const DashboardContent: React.FC = () => {
+  const { isRtl } = useLanguage();
+  const { activeTab, currentUser, permissions } = useApp();
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerDefaultStep, setScannerDefaultStep] = useState<1 | 2>(2);
+
+  const handleOpenScanner = (step: 1 | 2 = 2) => {
+    setScannerDefaultStep(step);
+    setIsScannerOpen(true);
+  };
+
+  const isAdmin = currentUser.role === 'Administrator';
 
   return (
-    <div className="h-screen w-full bg-slate-900 text-slate-100 flex flex-col font-sans overflow-hidden selection:bg-blue-600 selection:text-white">
-      {/* Top Navbar */}
-      <Navbar />
+    <div
+      className="min-h-screen bg-[#F1F5F9] flex flex-col font-sans text-[#1E293B] selection:bg-[#0284C7] selection:text-white"
+      dir={isRtl ? 'rtl' : 'ltr'}
+    >
+      {/* Top Navigation Bar */}
+      <Navbar onOpenScanner={() => handleOpenScanner(2)} />
 
-      {/* Main Body */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar Navigation */}
-        <Sidebar />
+      {/* Main Layout Body */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Fixed / Responsive Technical Sidebar */}
+        <Sidebar onOpenScanner={() => handleOpenScanner(2)} />
 
-        {/* Dynamic Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-900">
+        {/* Dynamic Main Workspace Area with Motion Transitions */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
           <div className="max-w-7xl mx-auto">
-            {(activeTab === 'dashboard' || activeTab === 'flights') && <OperationsDashboard />}
-            {(activeTab === 'flight-detail' || activeTab === 'flight_detail') && <FlightDetailPage />}
-            {(activeTab === 'ramp-mode' || activeTab === 'ramp_mode') && <RampQuickMode />}
-            {activeTab === 'baggage' && <BaggageModule />}
-            {activeTab === 'passengers' && <PassengerBoardingModule />}
-            {(activeTab === 'ground-services' || activeTab === 'ground_services') && <GroundServicesModule />}
-            {activeTab === 'incidents' && <IncidentModule />}
-            {activeTab === 'delays' && <DelayManagementModule />}
-            {activeTab === 'map' && <AirportMap />}
-            {activeTab === 'kpis' && <KpiDashboard />}
-            {(activeTab === 'sync' || activeTab === 'sync_center') && <SyncCenter />}
-            {(activeTab === 'audit' || activeTab === 'audit_trail') && <AuditTrailView />}
-            {activeTab === 'reports' && <ReportsView />}
-            {(activeTab === 'ai-assistant' || activeTab === 'ai_advisor') && <TurnaroundAiAssistant />}
-            {(activeTab === 'guide' || activeTab === 'help' || activeTab === 'user-guide') && <UserGuideView />}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
+                {/* Dedicated Ramp Agent Field Mode (Glove Friendly) */}
+                {activeTab === 'ramp_field' && (
+                  <RampAgentFieldModeView onOpenScanner={() => handleOpenScanner(2)} />
+                )}
+
+                {activeTab === 'dashboard' && (
+                  <OverviewDashboard onOpenScanner={handleOpenScanner} />
+                )}
+
+                {activeTab === 'flights' && (
+                  <FlightManagementView />
+                )}
+
+                {activeTab === 'baggage' && (
+                  <BaggageWorkflowView />
+                )}
+
+                {activeTab === 'tasks' && (
+                  <TaskManagementView />
+                )}
+
+                {activeTab === 'companies' && (
+                  isAdmin ? <CompanyManagementView /> : <AccessRestrictedNotice requiredPermission="canManageCompanies" />
+                )}
+
+                {activeTab === 'dolly' && (
+                  <DollyManagementView />
+                )}
+
+                {activeTab === 'users' && (
+                  isAdmin ? <UserManagementView /> : <AccessRestrictedNotice requiredPermission="canManageUsers" />
+                )}
+
+                {activeTab === 'logs' && (
+                  isAdmin || permissions.canViewAuditLogs ? <AuditLogsView /> : <AccessRestrictedNotice requiredPermission="canViewAuditLogs" />
+                )}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </main>
       </div>
 
-      {/* Modern Status Footer */}
-      <Footer />
-
-      {/* Floating Modals */}
-      <QuickEventModal />
+      {/* Global Zebra Handheld Scanner Modal Simulation */}
+      <ZebraScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        defaultStep={scannerDefaultStep}
+      />
     </div>
   );
 };
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <LanguageProvider>
+      <AppProvider>
+        <DashboardContent />
+      </AppProvider>
+    </LanguageProvider>
   );
 }
