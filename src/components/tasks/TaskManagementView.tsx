@@ -28,6 +28,7 @@ import {
   PlayCircle
 } from 'lucide-react';
 import {
+  Flight,
   FlightTaskItem,
   TaskStatus,
   TaskPriority,
@@ -88,7 +89,36 @@ export const TaskManagementView: React.FC = () => {
     ]
   });
 
-  const selectedFlightObj = flights.find(f => f.flightNbr === selectedFlightNbr) || flights[0];
+  const defaultFlight: Flight = {
+    id: 'FLT-001',
+    date: new Date().toISOString().slice(0, 10),
+    flightNbr: 'TU-720',
+    flightTask: 'Ground Turnaround & Rapid Loading',
+    paxNbrDep: 142,
+    paxNbrArr: 138,
+    gateNbr: '14',
+    flightType: 'Commercial Pax',
+    acType: 'A320neo',
+    checkInStartTime: '12:00',
+    sta: '13:30',
+    std: '14:25',
+    companyName: 'Tunisair',
+    reg: 'TS-IMU',
+    subplaneAreaZone: 'Stand 14',
+    sortingAreaZone: 'Carousel 02',
+    sortingAreaUser: 'Karim Ben Ali',
+    subplaneAreaUser: 'Mohamed Dridi',
+    createdBy: 'Slimane Soltane',
+    status: 'Loading',
+    isLocked: false,
+    totalBagsExpected: 140,
+    bagsSortedCount: 140,
+    bagsLoadedCount: 95,
+    comments: [],
+    dollyIds: []
+  };
+
+  const selectedFlightObj: Flight = flights.find(f => f.flightNbr === selectedFlightNbr) || flights[0] || defaultFlight;
 
   const filteredMilestones = turnaroundMilestones.filter(m => {
     if (selectedFlightNbr !== 'ALL' && m.flightNbr !== selectedFlightNbr) return false;
