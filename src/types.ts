@@ -36,6 +36,7 @@ export interface User {
   assignedFlightNbr?: string;
   assignedTasksCount?: number;
   assignedMilestones?: string[];
+  customPermissions?: Partial<UserPermission>;
 }
 
 export interface UserSessionLog {

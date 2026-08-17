@@ -971,11 +971,15 @@ const initialAgentSessions: AgentSession[] = [
 ];
 
 interface AppContextType {
-  // Current logged in user simulation
+  // Current logged in user & Auth
   currentUser: User;
   setCurrentUser: (user: User) => void;
   userRole: UserRole;
   permissions: UserPermission;
+  isAuthenticated: boolean;
+  login: (identifier: string, password?: string) => Promise<{ success: boolean; message?: string }>;
+  logout: () => void;
+  updateUserPermissions: (userId: string, customPermissions: Partial<UserPermission>) => void;
 
   // Active view tab
   activeTab: string;
@@ -1209,8 +1213,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('sas_audit', JSON.stringify(auditLogs));
   }, [auditLogs]);
 
-  const userRole = currentUser.role;
-  const permissions = ROLE_PERMISSIONS[userRole];
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('sas_is_authenticated') === 'true';
+  });
+
+  const userRole = currentUser?.role || 'Administrator';
+  const basePermissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS['Administrator'];
+  const permissions: UserPermission = currentUser?.customPermissions
+    ? { ...basePermissions, ...currentUser.customPermissions }
+    : basePermissions;
+
+  const login = async (identifier: string, password?: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const res = await api.auth.login(identifier, password);
+      if (res.data?.success && res.data.user) {
+        setCurrentUserState(res.data.user);
+        setIsAuthenticated(true);
+        localStorage.setItem('sas_is_authenticated', 'true');
+        if (res.data.token) {
+          localStorage.setItem('sas_auth_token', res.data.token);
+        }
+        return { success: true };
+      }
+      return { success: false, message: res.data?.message || 'Login failed' };
+    } catch (err: any) {
+      // Local fallback lookup
+      const clean = identifier.trim().toLowerCase();
+      const matched = users.find(u =>
+        u.email.toLowerCase() === clean ||
+        u.badgeId.toLowerCase() === clean ||
+        u.id.toLowerCase() === clean
+      );
+      if (matched) {
+        setCurrentUserState(matched);
+        setIsAuthenticated(true);
+        localStorage.setItem('sas_is_authenticated', 'true');
+        return { success: true };
+      }
+      return { success: false, message: 'Invalid credentials. User not found.' };
+    }
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('sas_is_authenticated');
+    localStorage.removeItem('sas_auth_token');
+    if (currentUser) {
+      api.auth.logout(currentUser.id).catch(() => {});
+      logActivity('Security', 'AUTH_LOGOUT', currentUser.badgeId, `User logged out: ${currentUser.name}`, 'info');
+    }
+  };
+
+  const updateUserPermissions = (userId: string, customPermissions: Partial<UserPermission>) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        const updated = { ...u, customPermissions };
+        if (currentUser.id === userId) {
+          setCurrentUserState(updated);
+        }
+        api.users.update(userId, { customPermissions }).catch(() => {});
+        logActivity('Security', 'UPDATE', u.badgeId, `Administrator modified permissions for ${u.name} (${u.role})`, 'warning');
+        return updated;
+      }
+      return u;
+    }));
+  };
 
   const selectedFlight = flights.find(f => f.id === selectedFlightId) || flights[0];
 
@@ -2034,6 +2101,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser,
         userRole,
         permissions,
+        isAuthenticated,
+        login,
+        logout,
+        updateUserPermissions,
         activeTab,
         setActiveTab,
         selectedFlightId,

@@ -7,7 +7,8 @@ import {
   Radio,
   CheckCircle2,
   ChevronDown,
-  UserCheck
+  UserCheck,
+  LogOut
 } from 'lucide-react';
 import { Language, User } from '../../types';
 
@@ -17,7 +18,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
   const { language, setLanguage, isRtl, t } = useLanguage();
-  const { currentUser, setCurrentUser, users, baggage, setActiveTab, activeTab } = useApp();
+  const { currentUser, setCurrentUser, users, baggage, setActiveTab, activeTab, logout } = useApp();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -277,20 +278,41 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
                 ))}
               </div>
 
-              <div className="pt-2 border-t border-[#F1F5F9] mt-2 text-center">
+              <div className="pt-2 border-t border-[#F1F5F9] mt-2 flex items-center justify-between px-1">
                 <button
                   onClick={() => {
                     setActiveTab('users');
                     setShowUserMenu(false);
                   }}
-                  className="text-[11px] text-[#0284C7] hover:underline font-bold"
+                  className="text-[11px] text-[#0284C7] hover:underline font-bold cursor-pointer"
                 >
                   {t('tabPermissionsMatrix')} &rarr;
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    logout();
+                  }}
+                  className="text-[11px] text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 hover:bg-rose-50 px-2 py-1 rounded cursor-pointer transition-colors"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span>Log Out</span>
                 </button>
               </div>
             </div>
           )}
         </div>
+
+        {/* Standalone Quick Logout button */}
+        <button
+          onClick={logout}
+          title="Sign Out / Change User"
+          className="hidden sm:flex p-2 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-all cursor-pointer items-center gap-1.5 text-xs font-bold"
+        >
+          <LogOut className="w-4 h-4" />
+          <span className="hidden md:inline">Sign Out</span>
+        </button>
 
       </div>
     </header>

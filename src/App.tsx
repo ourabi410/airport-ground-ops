@@ -15,19 +15,24 @@ import { AuditLogsView } from './components/logs/AuditLogsView';
 import { RampAgentFieldModeView } from './components/ramp/RampAgentFieldModeView';
 import { AccessRestrictedNotice } from './components/common/AccessRestrictedNotice';
 import { ZebraScannerModal } from './components/baggage/ZebraScannerModal';
+import { LoginView } from './components/auth/LoginView';
 
 const DashboardContent: React.FC = () => {
   const { isRtl } = useLanguage();
-  const { activeTab, currentUser, permissions } = useApp();
+  const { activeTab, currentUser, permissions, isAuthenticated } = useApp();
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerDefaultStep, setScannerDefaultStep] = useState<1 | 2>(2);
+
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
 
   const handleOpenScanner = (step: 1 | 2 = 2) => {
     setScannerDefaultStep(step);
     setIsScannerOpen(true);
   };
 
-  const isAdmin = currentUser.role === 'Administrator';
+  const isAdmin = currentUser?.role === 'Administrator';
 
   return (
     <div

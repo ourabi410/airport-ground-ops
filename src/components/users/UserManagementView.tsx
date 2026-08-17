@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { User, UserRole } from '../../types';
 import { DispatchFlightTaskModal } from '../common/DispatchFlightTaskModal';
+import { UserPermissionsModal } from './UserPermissionsModal';
 
 export const UserManagementView: React.FC = () => {
   const { t, isRtl } = useLanguage();
@@ -36,6 +37,7 @@ export const UserManagementView: React.FC = () => {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [dispatchTargetUserId, setDispatchTargetUserId] = useState<string | undefined>(undefined);
+  const [selectedPermUser, setSelectedPermUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Add User Form State
@@ -183,6 +185,7 @@ export const UserManagementView: React.FC = () => {
                   <th className="py-3 px-4">{t('colAssignedZone')}</th>
                   <th className="py-3 px-4">Assigned Flight</th>
                   <th className="py-3 px-4 text-center">{t('colBagsScanned')}</th>
+                  <th className="py-3 px-4 text-center">Permissions</th>
                   <th className="py-3 px-4 text-center">Dispatch Flight</th>
                   <th className="py-3 px-4 text-center">Simulate Login</th>
                 </tr>
@@ -256,6 +259,17 @@ export const UserManagementView: React.FC = () => {
 
                     <td className="py-3.5 px-4 text-center font-bold text-sky-700 font-mono">
                       {user.bagsScannedToday}
+                    </td>
+
+                    <td className="py-3.5 px-4 text-center">
+                      <button
+                        onClick={() => setSelectedPermUser(user)}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-all cursor-pointer flex items-center justify-center gap-1 mx-auto"
+                        title="Configure Granular Permissions"
+                      >
+                        <Shield className="w-3 h-3 text-purple-600" />
+                        <span>Security</span>
+                      </button>
                     </td>
 
                     <td className="py-3.5 px-4 text-center">
@@ -501,6 +515,15 @@ export const UserManagementView: React.FC = () => {
         onClose={() => setIsDispatchModalOpen(false)}
         preSelectedUserId={dispatchTargetUserId}
       />
+
+      {/* User Permissions Management Modal */}
+      {selectedPermUser && (
+        <UserPermissionsModal
+          user={selectedPermUser}
+          isOpen={!!selectedPermUser}
+          onClose={() => setSelectedPermUser(null)}
+        />
+      )}
 
     </div>
   );
