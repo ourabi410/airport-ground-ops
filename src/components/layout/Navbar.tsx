@@ -18,7 +18,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
   const { language, setLanguage, isRtl, t } = useLanguage();
-  const { currentUser, setCurrentUser, users, baggage, setActiveTab, activeTab, logout } = useApp();
+  const { currentUser, setCurrentUser, users, baggage, flights, setSelectedFlightId, setActiveTab, activeTab, logout } = useApp();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -101,6 +101,23 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
       {/* Right: Quick Scanner, Alerts, and Operator Status */}
       <div className="flex items-center gap-3 sm:gap-5">
         
+        {/* Active Agent Assigned Flight Notification Badge */}
+        {currentUser.assignedFlightNbr && (
+          <button
+            onClick={() => {
+              const matched = flights.find(f => f.flightNbr === currentUser.assignedFlightNbr);
+              if (matched) setSelectedFlightId(matched.id);
+              if (currentUser.role === 'Ramp/Loading Agent') setActiveTab('ramp_field');
+              else setActiveTab('baggage');
+            }}
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all cursor-pointer shadow-xs"
+            title={`Assigned to handle Flight ${currentUser.assignedFlightNbr}`}
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+            <span>Assigned Flight: <strong className="font-mono">{currentUser.assignedFlightNbr}</strong></span>
+          </button>
+        )}
+
         {/* Quick Zebra Scanner Button */}
         <button
           id="btn-quick-zebra-nav"

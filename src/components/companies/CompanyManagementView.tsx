@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { Company } from '../../types';
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal';
 
 export const CompanyManagementView: React.FC = () => {
   const { t, isRtl } = useLanguage();
@@ -23,6 +24,7 @@ export const CompanyManagementView: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingComp, setEditingComp] = useState<Company | null>(null);
+  const [deleteTargetComp, setDeleteTargetComp] = useState<Company | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Form State
@@ -158,13 +160,15 @@ export const CompanyManagementView: React.FC = () => {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleOpenEdit(comp)}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
+                  title="Edit Partner"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => deleteCompany(comp.id)}
-                  className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600"
+                  onClick={() => setDeleteTargetComp(comp)}
+                  className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 cursor-pointer"
+                  title="Delete Partner Record"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -337,6 +341,24 @@ export const CompanyManagementView: React.FC = () => {
 
           </div>
         </div>
+      )}
+
+      {/* Confirm Delete Company Modal */}
+      {deleteTargetComp && (
+        <ConfirmDeleteModal
+          isOpen={!!deleteTargetComp}
+          onClose={() => setDeleteTargetComp(null)}
+          onConfirm={() => {
+            if (deleteTargetComp) {
+              deleteCompany(deleteTargetComp.id);
+              setDeleteTargetComp(null);
+            }
+          }}
+          title="Delete Airline Partner"
+          itemName={`${deleteTargetComp.name} (${deleteTargetComp.abbreviation})`}
+          itemType="airline company"
+          warningMessage="This will permanently delete this airline partner profile and SLA records."
+        />
       )}
 
     </div>

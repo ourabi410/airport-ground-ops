@@ -11,16 +11,19 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import { Dolly, DollyType, DollyStatus } from '../../types';
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal';
 
 export const DollyManagementView: React.FC = () => {
   const { t, isRtl } = useLanguage();
-  const { dollies, addDolly, updateDolly, assignDollyFlight, flights, baggage } = useApp();
+  const { dollies, addDolly, updateDolly, deleteDolly, assignDollyFlight, flights, baggage, currentUser } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDollyForBags, setSelectedDollyForBags] = useState<Dolly | null>(null);
+  const [deleteTargetDolly, setDeleteTargetDolly] = useState<Dolly | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
@@ -137,19 +140,31 @@ export const DollyManagementView: React.FC = () => {
                     </div>
                   </div>
 
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    dolly.status === 'Available'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : dolly.status === 'Loading'
-                      ? 'bg-sky-100 text-sky-800'
-                      : dolly.status === 'In Transit'
-                      ? 'bg-indigo-100 text-indigo-800'
-                      : dolly.status === 'At Aircraft Hold'
-                      ? 'bg-purple-100 text-purple-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {dolly.status}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      dolly.status === 'Available'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : dolly.status === 'Loading'
+                        ? 'bg-sky-100 text-sky-800'
+                        : dolly.status === 'In Transit'
+                        ? 'bg-indigo-100 text-indigo-800'
+                        : dolly.status === 'At Aircraft Hold'
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {dolly.status}
+                    </span>
+
+                    {currentUser?.role === 'Administrator' && (
+                      <button
+                        onClick={() => setDeleteTargetDolly(dolly)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="Delete Dolly Equipment"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Capacity Meter */}
@@ -354,6 +369,24 @@ export const DollyManagementView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Confirm Delete Dolly Modal */}
+      {deleteTargetDolly && (
+        <ConfirmDeleteModal
+          isOpen={!!deleteTargetDolly}
+          onClose={() => setDeleteTargetDolly(null)}
+          onConfirm={() => {
+            if (deleteTargetDolly) {
+              deleteDolly(deleteTargetDolly.id);
+              setDeleteTargetDolly(null);
+            }
+          }}
+          title="Delete Dolly Equipment"
+          itemName={`Dolly #${deleteTargetDolly.id} (${deleteTargetDolly.type})`}
+          itemType="dolly equipment"
+          warningMessage="This will permanently delete this dolly cart/container from the fleet registry."
+        />
       )}
 
     </div>

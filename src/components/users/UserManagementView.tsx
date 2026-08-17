@@ -21,6 +21,8 @@ import {
 import { User, UserRole } from '../../types';
 import { DispatchFlightTaskModal } from '../common/DispatchFlightTaskModal';
 import { UserPermissionsModal } from './UserPermissionsModal';
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal';
+import { Trash2 } from 'lucide-react';
 
 export const UserManagementView: React.FC = () => {
   const { t, isRtl } = useLanguage();
@@ -28,6 +30,7 @@ export const UserManagementView: React.FC = () => {
     users,
     addUser,
     updateUser,
+    deleteUser,
     currentUser,
     setCurrentUser,
     sessionLogs
@@ -38,6 +41,7 @@ export const UserManagementView: React.FC = () => {
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [dispatchTargetUserId, setDispatchTargetUserId] = useState<string | undefined>(undefined);
   const [selectedPermUser, setSelectedPermUser] = useState<User | null>(null);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Add User Form State
@@ -286,16 +290,28 @@ export const UserManagementView: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4 text-center">
-                      <button
-                        onClick={() => setCurrentUser(user)}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          currentUser.id === user.id
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-100 hover:bg-sky-50 text-slate-700 hover:text-sky-700'
-                        }`}
-                      >
-                        {currentUser.id === user.id ? 'Active' : 'Switch Role'}
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => setCurrentUser(user)}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            currentUser.id === user.id
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-100 hover:bg-sky-50 text-slate-700 hover:text-sky-700'
+                          }`}
+                        >
+                          {currentUser.id === user.id ? 'Active' : 'Switch'}
+                        </button>
+
+                        {currentUser.role === 'Administrator' && user.id !== currentUser.id && (
+                          <button
+                            onClick={() => setDeleteTargetUser(user)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                            title="Delete User Account"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
 
                   </tr>
@@ -522,6 +538,24 @@ export const UserManagementView: React.FC = () => {
           user={selectedPermUser}
           isOpen={!!selectedPermUser}
           onClose={() => setSelectedPermUser(null)}
+        />
+      )}
+
+      {/* Confirm Delete User Modal */}
+      {deleteTargetUser && (
+        <ConfirmDeleteModal
+          isOpen={!!deleteTargetUser}
+          onClose={() => setDeleteTargetUser(null)}
+          onConfirm={() => {
+            if (deleteTargetUser) {
+              deleteUser(deleteTargetUser.id);
+              setDeleteTargetUser(null);
+            }
+          }}
+          title="Delete Staff Account"
+          itemName={`${deleteTargetUser.name} (${deleteTargetUser.badgeId})`}
+          itemType="user"
+          warningMessage="This will permanently delete the staff member and their system access credentials."
         />
       )}
 

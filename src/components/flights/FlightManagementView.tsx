@@ -21,6 +21,8 @@ import {
 import { Flight } from '../../types';
 import { FlightModal } from './FlightModal';
 import { FlightDetailsDrawer } from './FlightDetailsDrawer';
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal';
+import { Ban, XCircle } from 'lucide-react';
 
 export const FlightManagementView: React.FC = () => {
   const { t, isRtl } = useLanguage();
@@ -28,19 +30,28 @@ export const FlightManagementView: React.FC = () => {
     flights,
     lockFlight,
     unlockFlight,
+    cancelFlight,
     deleteFlight,
     setSelectedFlightId,
     setActiveTab,
-    permissions
+    permissions,
+    currentUser
   } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFlight, setEditingFlight] = useState<Flight | null>(null);
   const [drawerFlight, setDrawerFlight] = useState<Flight | null>(null);
+  const [deleteTargetFlight, setDeleteTargetFlight] = useState<Flight | null>(null);
+  const [cancelTargetFlight, setCancelTargetFlight] = useState<Flight | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY'>('ALL');
+
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const isAdmin = currentUser?.role === 'Administrator';
 
   const filteredFlights = flights.filter(f => {
+    if (dateFilter === 'TODAY' && f.date !== todayDate) return false;
     if (statusFilter !== 'ALL' && f.status !== statusFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -50,7 +61,8 @@ export const FlightManagementView: React.FC = () => {
         f.reg.toLowerCase().includes(q) ||
         f.sortingAreaUser.toLowerCase().includes(q) ||
         f.subplaneAreaUser.toLowerCase().includes(q) ||
-        f.createdBy.toLowerCase().includes(q)
+        f.createdBy.toLowerCase().includes(q) ||
+        f.date.includes(q)
       );
     }
     return true;
@@ -100,17 +112,38 @@ export const FlightManagementView: React.FC = () => {
         <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
           
           <div className="flex flex-wrap items-center gap-2">
-            {['ALL', 'Scheduled', 'Sorting', 'Loading', 'Reconciled', 'Departed'].map((status) => (
+            {/* Date Filter Toggle */}
+            <div className="bg-slate-100 p-0.5 rounded-xl flex items-center border border-slate-200 text-xs font-bold mr-2">
+              <button
+                onClick={() => setDateFilter('ALL')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  dateFilter === 'ALL' ? 'bg-white shadow-xs text-slate-900 font-extrabold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All Dates
+              </button>
+              <button
+                onClick={() => setDateFilter('TODAY')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  dateFilter === 'TODAY' ? 'bg-sky-600 shadow-xs text-white font-extrabold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Today Only</span>
+              </button>
+            </div>
+
+            {['ALL', 'Scheduled', 'Sorting', 'Loading', 'Reconciled', 'Departed', 'Cancelled'].map((status) => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                   statusFilter === status
-                    ? 'bg-sky-600 text-white'
+                    ? status === 'Cancelled' ? 'bg-rose-600 text-white' : 'bg-sky-600 text-white'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {status === 'ALL' ? 'All Flights' : status}
+                {status === 'ALL' ? 'All Statuses' : status}
               </button>
             ))}
           </div>
@@ -154,24 +187,35 @@ export const FlightManagementView: React.FC = () => {
               ) : (
                 filteredFlights.map((flight) => {
                   const percent = flight.totalBagsExpected > 0 ? Math.round((flight.bagsLoadedCount / flight.totalBagsExpected) * 100) : 0;
+                  const isToday = flight.date === todayDate;
+                  const isCancelled = flight.status === 'Cancelled';
                   
                   return (
                     <tr
                       key={flight.id}
                       className={`hover:bg-slate-50/80 transition-colors ${
-                        flight.isLocked ? 'bg-slate-50/50' : ''
+                        isCancelled
+                          ? 'bg-rose-50/30 opacity-75'
+                          : flight.isLocked
+                          ? 'bg-slate-50/50'
+                          : isToday
+                          ? 'bg-sky-50/20'
+                          : ''
                       }`}
                     >
                       {/* 1. Flight NBR */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-800 flex items-center justify-center font-mono font-black text-xs shrink-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-black text-xs shrink-0 ${
+                            isCancelled ? 'bg-rose-100 text-rose-800' : 'bg-sky-100 text-sky-800'
+                          }`}>
                             {flight.flightNbr.split('-')[0]}
                           </div>
                           <div>
                             <div className="font-extrabold font-mono text-slate-900 text-sm flex items-center gap-1.5">
-                              <span>{flight.flightNbr}</span>
+                              <span className={isCancelled ? 'line-through text-slate-500' : ''}>{flight.flightNbr}</span>
                               {flight.isLocked && <Lock className="w-3 h-3 text-slate-600" />}
+                              {isCancelled && <Ban className="w-3.5 h-3.5 text-rose-600" />}
                             </div>
                             <div className="text-[10px] text-slate-600 font-mono">
                               REG: {flight.reg} ({flight.acType}) • Gate {flight.gateNbr}
@@ -184,7 +228,12 @@ export const FlightManagementView: React.FC = () => {
                       <td className="py-3.5 px-4 text-slate-700">
                         <div className="font-medium flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-slate-600" />
-                          <span>{flight.date}</span>
+                          <span className={isToday ? 'font-bold text-sky-700' : ''}>{flight.date}</span>
+                          {isToday && (
+                            <span className="px-1.5 py-0.2 rounded bg-sky-100 text-sky-800 text-[9px] font-extrabold">
+                              Today
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-slate-600 font-mono">
                           STA {flight.sta} / STD {flight.std}
@@ -239,7 +288,9 @@ export const FlightManagementView: React.FC = () => {
                       <td className="py-3.5 px-4">
                         <div>
                           <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            flight.status === 'Departed' || flight.isLocked
+                            isCancelled
+                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                              : flight.status === 'Departed' || flight.isLocked
                               ? 'bg-slate-200 text-slate-800'
                               : flight.status === 'Reconciled'
                               ? 'bg-emerald-100 text-emerald-800'
@@ -248,16 +299,19 @@ export const FlightManagementView: React.FC = () => {
                               : 'bg-amber-100 text-amber-800'
                           }`}>
                             {flight.status === 'Reconciled' && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                            {isCancelled && <XCircle className="w-3 h-3 text-rose-600" />}
                             <span>{flight.status}</span>
                           </span>
 
-                          <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-600 font-mono">
-                            <span>{flight.bagsLoadedCount}/{flight.totalBagsExpected} Bags ({percent}%)</span>
-                          </div>
+                          {!isCancelled && (
+                            <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-600 font-mono">
+                              <span>{flight.bagsLoadedCount}/{flight.totalBagsExpected} Bags ({percent}%)</span>
+                            </div>
+                          )}
                         </div>
                       </td>
 
-                      {/* 9. Actions (View details, Edit, Lock, Scan status overview) */}
+                      {/* 9. Actions (View details, Scan, Edit, Lock, Cancel, Delete) */}
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1">
                           
@@ -278,8 +332,9 @@ export const FlightManagementView: React.FC = () => {
                               setSelectedFlightId(flight.id);
                               setActiveTab('baggage');
                             }}
-                            className="p-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 transition-colors cursor-pointer"
-                            title="Zebra Scanner Overview"
+                            disabled={isCancelled}
+                            className="p-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 transition-colors cursor-pointer disabled:opacity-30"
+                            title={isCancelled ? 'Flight is cancelled' : 'Zebra Scanner Overview'}
                           >
                             <Radio className="w-4 h-4" />
                           </button>
@@ -288,9 +343,9 @@ export const FlightManagementView: React.FC = () => {
                           <button
                             id={`btn-edit-flight-${flight.id}`}
                             onClick={() => handleOpenEdit(flight)}
-                            disabled={flight.isLocked}
+                            disabled={flight.isLocked || isCancelled}
                             className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 disabled:opacity-30 transition-colors cursor-pointer"
-                            title={flight.isLocked ? 'Flight is locked' : t('edit')}
+                            title={flight.isLocked ? 'Flight is locked' : isCancelled ? 'Flight cancelled' : t('edit')}
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
@@ -299,7 +354,8 @@ export const FlightManagementView: React.FC = () => {
                           <button
                             id={`btn-lock-flight-${flight.id}`}
                             onClick={() => flight.isLocked ? unlockFlight(flight.id) : lockFlight(flight.id)}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            disabled={isCancelled}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-30 ${
                               flight.isLocked
                                 ? 'bg-amber-100 hover:bg-amber-200 text-amber-800'
                                 : 'bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-700'
@@ -308,6 +364,28 @@ export const FlightManagementView: React.FC = () => {
                           >
                             {flight.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                           </button>
+
+                          {/* Cancel Flight */}
+                          {!isCancelled && (
+                            <button
+                              onClick={() => setCancelTargetFlight(flight)}
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                              title="Cancel Flight"
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Delete Flight (Admin only with confirm modal) */}
+                          {isAdmin && (
+                            <button
+                              onClick={() => setDeleteTargetFlight(flight)}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              title="Delete Flight Record"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
 
                         </div>
                       </td>
@@ -335,6 +413,64 @@ export const FlightManagementView: React.FC = () => {
         onClose={() => setDrawerFlight(null)}
         onEdit={(f) => handleOpenEdit(f)}
       />
+
+      {/* Confirm Delete Modal */}
+      {deleteTargetFlight && (
+        <ConfirmDeleteModal
+          isOpen={!!deleteTargetFlight}
+          onClose={() => setDeleteTargetFlight(null)}
+          onConfirm={() => {
+            if (deleteTargetFlight) {
+              deleteFlight(deleteTargetFlight.id);
+              setDeleteTargetFlight(null);
+            }
+          }}
+          title="Delete Flight Record"
+          itemName={`Flight ${deleteTargetFlight.flightNbr} (${deleteTargetFlight.companyName})`}
+          itemType="flight"
+          warningMessage="This will permanently delete this flight and its associated turnaround manifests."
+        />
+      )}
+
+      {/* Confirm Flight Cancellation Modal */}
+      {cancelTargetFlight && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4" dir={isRtl ? 'rtl' : 'ltr'}>
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                <Ban className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-black text-slate-900">Cancel Flight Operation</h3>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Are you sure you want to cancel Flight <strong className="font-mono text-slate-900">{cancelTargetFlight.flightNbr}</strong>? This will freeze all turnaround actions and alert field agents.
+            </p>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCancelTargetFlight(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 rounded-xl"
+              >
+                Go Back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (cancelTargetFlight) {
+                    cancelFlight(cancelTargetFlight.id, 'Cancelled by Airline Operations');
+                    setCancelTargetFlight(null);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs"
+              >
+                Confirm Cancellation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

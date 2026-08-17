@@ -128,8 +128,23 @@ export const RampAgentFieldModeView: React.FC<RampAgentFieldModeViewProps> = ({ 
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const isSameDay = activeFlight.date === todayDate;
+
   // Stamping action for milestone
   const handleStampMilestone = (item: StandardRampMilestone) => {
+    if (!isSameDay) {
+      soundManager.playErrorBuzzer();
+      showToast(`🔒 Restricted: Flight date is ${activeFlight.date}. Turnaround operations only open on the day of flight (Today: ${todayDate}).`);
+      return;
+    }
+
+    if (activeFlight.status === 'Cancelled') {
+      soundManager.playErrorBuzzer();
+      showToast(`❌ Cannot stamp milestones: Flight ${activeFlight.flightNbr} is CANCELLED.`);
+      return;
+    }
+
     const now = new Date();
     const utcHours = String(now.getUTCHours()).padStart(2, '0');
     const utcMins = String(now.getUTCMinutes()).padStart(2, '0');
@@ -300,6 +315,35 @@ export const RampAgentFieldModeView: React.FC<RampAgentFieldModeViewProps> = ({ 
           </button>
         </div>
       </div>
+
+      {/* Same-Day Restriction & Cancellation Alert */}
+      {!isSameDay && (
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <span>
+              <strong>Turnaround Restricted:</strong> This flight is scheduled for <strong>{activeFlight.date}</strong> (Today is {todayDate}). Field stamping is only permitted on the day of the flight.
+            </span>
+          </div>
+          <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-200 text-[10px] font-bold uppercase shrink-0">
+            Same-Day Lock
+          </span>
+        </div>
+      )}
+
+      {activeFlight.status === 'Cancelled' && (
+        <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <span>
+              <strong>FLIGHT CANCELLED:</strong> Operations on Flight {activeFlight.flightNbr} have been cancelled by dispatch.
+            </span>
+          </div>
+          <span className="px-2.5 py-1 rounded bg-rose-500/20 text-rose-200 text-[10px] font-bold uppercase shrink-0">
+            Cancelled
+          </span>
+        </div>
+      )}
 
       {/* Telemetry & Progress Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

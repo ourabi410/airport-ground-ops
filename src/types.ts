@@ -53,7 +53,7 @@ export interface UserSessionLog {
 }
 
 export type FlightType = 'Commercial Pax' | 'Cargo' | 'VIP/Charter' | 'Tech Stop';
-export type FlightStatus = 'Scheduled' | 'Sorting' | 'Loading' | 'Reconciled' | 'Departed' | 'Delayed' | 'Locked';
+export type FlightStatus = 'Scheduled' | 'Sorting' | 'Loading' | 'Reconciled' | 'Departed' | 'Delayed' | 'Locked' | 'Cancelled';
 
 export interface FlightComment {
   id: string;

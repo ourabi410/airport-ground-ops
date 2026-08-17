@@ -1007,6 +1007,7 @@ interface AppContextType {
   updateFlight: (id: string, updates: Partial<Flight>) => void;
   lockFlight: (id: string) => void;
   unlockFlight: (id: string) => void;
+  cancelFlight: (id: string, reason?: string) => void;
   deleteFlight: (id: string) => void;
   addFlightComment: (flightId: string, message: string, category: 'general' | 'discrepancy' | 'security' | 'loading' | 'delay') => void;
 
@@ -1044,11 +1045,13 @@ interface AppContextType {
   // Dolly Actions
   addDolly: (dolly: Omit<Dolly, 'id' | 'currentBagsCount' | 'lastUpdated' | 'bags'>) => void;
   updateDolly: (id: string, updates: Partial<Dolly>) => void;
+  deleteDolly: (id: string) => void;
   assignDollyFlight: (dollyId: string, flightNbr?: string) => void;
 
   // User Actions
   addUser: (user: Omit<User, 'id' | 'bagsScannedToday' | 'flightsHandled'>) => void;
   updateUser: (id: string, updates: Partial<User>) => void;
+  deleteUser: (id: string) => void;
 
   // Task Actions
   addTask: (task: Omit<FlightTaskItem, 'id' | 'completedAt'>) => void;
@@ -1382,6 +1385,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return f;
     }));
     api.flights.lock(id, false).catch(() => {});
+  };
+
+  const cancelFlight = (id: string, reason: string = 'Operational cancellation') => {
+    setFlights(prev => prev.map(f => {
+      if (f.id === id) {
+        logActivity('Flight', 'UPDATE', f.flightNbr, `Flight ${f.flightNbr} CANCELLED. Reason: ${reason}`, 'critical', f.status, 'Cancelled');
+        return { ...f, status: 'Cancelled' as const };
+      }
+      return f;
+    }));
+    api.flights.update(id, { status: 'Cancelled' }).catch(() => {});
   };
 
   const deleteFlight = (id: string) => {
@@ -1753,6 +1767,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     api.dollies.update(dollyId, { assignedFlightNbr: flightNbr, status: flightNbr ? 'Loading' : 'Available' }).catch(() => {});
   };
 
+  const deleteDolly = (id: string) => {
+    const dolly = dollies.find(d => d.id === id);
+    if (dolly) {
+      logActivity('Dolly', 'DELETE', dolly.id, `Dolly ${dolly.id} removed from fleet`, 'warning');
+      setDollies(prev => prev.filter(d => d.id !== id));
+      api.dollies.delete(id).catch(() => {});
+    }
+  };
+
   // User CRUD
   const addUser = (userData: Omit<User, 'id' | 'bagsScannedToday' | 'flightsHandled'>) => {
     const newUser: User = {
@@ -1775,6 +1798,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return u;
     }));
     api.users.update(id, updates).catch(() => {});
+  };
+
+  const deleteUser = (id: string) => {
+    const user = users.find(u => u.id === id);
+    if (user) {
+      logActivity('Users', 'DELETE', user.badgeId, `User account ${user.name} (${user.badgeId}) deleted`, 'warning');
+      setUsers(prev => prev.filter(u => u.id !== id));
+      api.users.delete(id).catch(() => {});
+    }
   };
 
   // Tasks
@@ -2129,6 +2161,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateFlight,
         lockFlight,
         unlockFlight,
+        cancelFlight,
         deleteFlight,
         addFlightComment,
         updateMilestoneStatus,
@@ -2149,9 +2182,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteCompany,
         addDolly,
         updateDolly,
+        deleteDolly,
         assignDollyFlight,
         addUser,
         updateUser,
+        deleteUser,
         addTask,
         updateTaskStatus,
         toggleTaskChecklist,
