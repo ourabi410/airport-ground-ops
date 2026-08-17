@@ -25,6 +25,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
   // Missing bag alerts count
   const missingBags = baggage.filter(b => b.status === 'MISSING' || (b.alerts && b.alerts.length > 0));
 
+  // Determine if current user is an operational field agent with an active flight assignment
+  const isOperationalAgent = currentUser.role === 'Sorting Agent' || currentUser.role === 'Ramp/Loading Agent' || currentUser.role === 'Subplane Agent';
+
+  const assignedFlight = isOperationalAgent ? (
+    flights.find(f =>
+      f.status !== 'Cancelled' && (
+        (currentUser.assignedFlightNbr && f.flightNbr === currentUser.assignedFlightNbr) ||
+        f.sortingAreaUser === currentUser.name ||
+        f.subplaneAreaUser === currentUser.name
+      )
+    ) || (currentUser.assignedFlightNbr ? flights.find(f => f.flightNbr === currentUser.assignedFlightNbr && f.status !== 'Cancelled') : null)
+  ) : null;
+
   const getPageTitle = () => {
     switch (activeTab) {
       case 'ramp_field':
@@ -101,20 +114,27 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
       {/* Right: Quick Scanner, Alerts, and Operator Status */}
       <div className="flex items-center gap-3 sm:gap-5">
         
-        {/* Active Agent Assigned Flight Notification Badge */}
-        {currentUser.assignedFlightNbr && (
+        {/* Active Agent Assigned Flight Notification Badge (Only for operational agents) */}
+        {assignedFlight && (
           <button
             onClick={() => {
-              const matched = flights.find(f => f.flightNbr === currentUser.assignedFlightNbr);
-              if (matched) setSelectedFlightId(matched.id);
-              if (currentUser.role === 'Ramp/Loading Agent') setActiveTab('ramp_field');
-              else setActiveTab('baggage');
+              setSelectedFlightId(assignedFlight.id);
+              if (currentUser.role === 'Ramp/Loading Agent') {
+                setActiveTab('ramp_field');
+              } else if (currentUser.role === 'Sorting Agent') {
+                setActiveTab('baggage');
+              } else {
+                setActiveTab('tasks');
+              }
             }}
-            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all cursor-pointer shadow-xs"
-            title={`Assigned to handle Flight ${currentUser.assignedFlightNbr}`}
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300/80 hover:bg-amber-100 transition-all cursor-pointer shadow-xs"
+            title={`Assigned to Flight ${assignedFlight.flightNbr} (${assignedFlight.companyName}) • Gate ${assignedFlight.gateNbr}`}
           >
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-            <span>Assigned Flight: <strong className="font-mono">{currentUser.assignedFlightNbr}</strong></span>
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0"></span>
+            <span>
+              Assigned Flight: <strong className="font-mono text-amber-950">{assignedFlight.flightNbr}</strong>
+              <span className="text-amber-700 font-normal text-[11px] ml-1">({assignedFlight.companyName} • Gate {assignedFlight.gateNbr})</span>
+            </span>
           </button>
         )}
 

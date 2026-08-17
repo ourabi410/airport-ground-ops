@@ -98,7 +98,6 @@ const initialUsers: User[] = [
     lastLogin: '2026-08-17 13:45',
     bagsScannedToday: 142,
     flightsHandled: 12,
-    assignedFlightNbr: 'TU-720',
     assignedTasksCount: 4
   },
   {

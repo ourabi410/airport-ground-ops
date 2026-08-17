@@ -223,7 +223,6 @@ class DatabaseService
                         'lastLogin' => now()->toDateTimeString(),
                         'bagsScannedToday' => 142,
                         'flightsHandled' => 12,
-                        'assignedFlightNbr' => 'TU-720',
                         'assignedTasksCount' => 4,
                     ],
                     [
