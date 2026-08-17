@@ -1460,8 +1460,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteFlight = (id: string) => {
     const flight = flights.find(f => f.id === id);
     if (flight) {
-      logActivity('Flight', 'DELETE', flight.flightNbr, `Flight ${flight.flightNbr} deleted from schedule`, 'warning');
+      logActivity('Flight', 'DELETE', flight.flightNbr, `Flight ${flight.flightNbr} deleted from schedule (foreign keys cascaded)`, 'warning');
       setFlights(prev => prev.filter(f => f.id !== id));
+      setBaggage(prev => prev.filter(b => b.flightId !== id && b.flightNbr !== flight.flightNbr));
+      setTurnaroundMilestones(prev => prev.filter(m => m.flightId !== id && m.flightNbr !== flight.flightNbr));
+      setTasks(prev => prev.filter(t => t.flightId !== id && t.flightNbr !== flight.flightNbr));
+      setAgentSessions(prev => prev.filter(s => s.flightId !== id && s.flightNbr !== flight.flightNbr));
+      setDollies(prev => prev.map(d => d.assignedFlightNbr === flight.flightNbr ? { ...d, assignedFlightNbr: undefined, status: 'Available', currentBagsCount: 0 } : d));
+      
       if (selectedFlightId === id) {
         const remaining = flights.filter(f => f.id !== id);
         if (remaining.length > 0) setSelectedFlightId(remaining[0].id);
@@ -1829,8 +1835,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteDolly = (id: string) => {
     const dolly = dollies.find(d => d.id === id);
     if (dolly) {
-      logActivity('Dolly', 'DELETE', dolly.id, `Dolly ${dolly.id} removed from fleet`, 'warning');
+      logActivity('Dolly', 'DELETE', dolly.id, `Dolly ${dolly.id} removed from fleet (baggage and flight keys cascaded)`, 'warning');
       setDollies(prev => prev.filter(d => d.id !== id));
+      setBaggage(prev => prev.map(b => b.dollyId === id ? { ...b, dollyId: undefined } : b));
+      setFlights(prev => prev.map(f => ({ ...f, dollyIds: (f.dollyIds || []).filter(did => did !== id) })));
       api.dollies.delete(id).catch(() => {});
     }
   };
@@ -1862,8 +1870,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteUser = (id: string) => {
     const user = users.find(u => u.id === id);
     if (user) {
-      logActivity('Users', 'DELETE', user.badgeId, `User account ${user.name} (${user.badgeId}) deleted`, 'warning');
+      logActivity('Users', 'DELETE', user.badgeId, `User account ${user.name} (${user.badgeId}) deleted (sessions cascaded)`, 'warning');
       setUsers(prev => prev.filter(u => u.id !== id));
+      setAgentSessions(prev => prev.filter(s => s.userId !== id && s.agentId !== id));
+      setTasks(prev => prev.map(t => t.assignedUserId === id ? { ...t, assignedUserId: undefined, assignedUserName: 'Unassigned' } : t));
       api.users.delete(id).catch(() => {});
     }
   };

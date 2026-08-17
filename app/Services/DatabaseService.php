@@ -86,6 +86,7 @@ class DatabaseService
     {
         $items = self::all($table);
         $initialCount = count($items);
+        $targetItem = self::find($table, $id);
 
         $filtered = array_values(array_filter($items, function ($item) use ($id) {
             return ($item['id'] ?? '') !== $id && ($item['flightNbr'] ?? '') !== $id && ($item['tagNumber'] ?? '') !== $id;
@@ -93,6 +94,103 @@ class DatabaseService
 
         if (count($filtered) !== $initialCount) {
             self::saveAll($table, $filtered);
+
+            // ==========================================
+            // FOREIGN KEY CASCADE & REFERENTIAL CLEANUP
+            // ==========================================
+            if ($table === 'flights' && $targetItem) {
+                $flightId = $targetItem['id'] ?? $id;
+                $flightNbr = $targetItem['flightNbr'] ?? '';
+
+                // 1. Cascade delete Baggages
+                $bags = self::all('baggages');
+                $filteredBags = array_values(array_filter($bags, function ($b) use ($flightId, $flightNbr) {
+                    return ($b['flightId'] ?? '') !== $flightId && ($b['flightNbr'] ?? '') !== $flightNbr;
+                }));
+                self::saveAll('baggages', $filteredBags);
+
+                // 2. Cascade delete Turnaround Milestones
+                $milestones = self::all('milestones');
+                $filteredMilestones = array_values(array_filter($milestones, function ($m) use ($flightId, $flightNbr) {
+                    return ($m['flightId'] ?? '') !== $flightId && ($m['flightNbr'] ?? '') !== $flightNbr;
+                }));
+                self::saveAll('milestones', $filteredMilestones);
+
+                // 3. Cascade delete Flight Tasks
+                $tasks = self::all('tasks');
+                $filteredTasks = array_values(array_filter($tasks, function ($t) use ($flightId, $flightNbr) {
+                    return ($t['flightId'] ?? '') !== $flightId && ($t['flightNbr'] ?? '') !== $flightNbr;
+                }));
+                self::saveAll('tasks', $filteredTasks);
+
+                // 4. Cascade delete Active Agent Sessions
+                $sessions = self::all('sessions');
+                $filteredSessions = array_values(array_filter($sessions, function ($s) use ($flightId, $flightNbr) {
+                    return ($s['flightId'] ?? '') !== $flightId && ($s['flightNbr'] ?? '') !== $flightNbr;
+                }));
+                self::saveAll('sessions', $filteredSessions);
+
+                // 5. Free up Dollies assigned to this flight
+                if ($flightNbr) {
+                    $dollies = self::all('dollies');
+                    $updatedDollies = array_map(function ($d) use ($flightNbr) {
+                        if (($d['assignedFlightNbr'] ?? '') === $flightNbr) {
+                            $d['assignedFlightNbr'] = null;
+                            $d['status'] = 'Available';
+                            $d['currentBagsCount'] = 0;
+                        }
+                        return $d;
+                    }, $dollies);
+                    self::saveAll('dollies', $updatedDollies);
+                }
+            }
+
+            if ($table === 'users' && $targetItem) {
+                $userId = $targetItem['id'] ?? $id;
+
+                // 1. Cascade delete Sessions for this user
+                $sessions = self::all('sessions');
+                $filteredSessions = array_values(array_filter($sessions, function ($s) use ($userId) {
+                    return ($s['userId'] ?? '') !== $userId;
+                }));
+                self::saveAll('sessions', $filteredSessions);
+
+                // 2. Unassign tasks from deleted user
+                $tasks = self::all('tasks');
+                $updatedTasks = array_map(function ($t) use ($userId) {
+                    if (($t['assignedUserId'] ?? '') === $userId) {
+                        $t['assignedUserId'] = null;
+                        $t['assignedUserName'] = 'Unassigned';
+                    }
+                    return $t;
+                }, $tasks);
+                self::saveAll('tasks', $updatedTasks);
+            }
+
+            if ($table === 'dollies' && $targetItem) {
+                $dollyId = $targetItem['id'] ?? $id;
+
+                // 1. Unmap baggage on this dolly
+                $bags = self::all('baggages');
+                $updatedBags = array_map(function ($b) use ($dollyId) {
+                    if (($b['dollyId'] ?? '') === $dollyId) {
+                        $b['dollyId'] = null;
+                    }
+                    return $b;
+                }, $bags);
+                self::saveAll('baggages', $updatedBags);
+
+                // 2. Remove dolly ID from flights dollyIds array
+                $flights = self::all('flights');
+                $updatedFlights = array_map(function ($f) use ($dollyId) {
+                    if (isset($f['dollyIds']) && is_array($f['dollyIds'])) {
+                        $f['dollyIds'] = array_values(array_filter($f['dollyIds'], fn ($did) => $did !== $dollyId));
+                    }
+                    return $f;
+                }, $flights);
+                self::saveAll('flights', $updatedFlights);
+            }
+
             return true;
         }
 
