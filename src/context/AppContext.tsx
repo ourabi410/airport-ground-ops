@@ -1078,8 +1078,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : initialUsers;
   });
 
-  const [currentUser, setCurrentUserState] = useState<User>(() => users[0]);
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [currentUser, setCurrentUserState] = useState<User>(() => {
+    const savedUser = localStorage.getItem('sas_current_user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.id) return parsed;
+      } catch (e) {}
+    }
+    const savedUserId = localStorage.getItem('sas_current_user_id');
+    if (savedUserId) {
+      const found = initialUsers.find((u: User) => u.id === savedUserId);
+      if (found) return found;
+    }
+    return initialUsers[0];
+  });
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const savedTab = localStorage.getItem('sas_active_tab');
+    return savedTab || 'overview';
+  });
 
   const [companies, setCompanies] = useState<Company[]>(() => {
     const saved = localStorage.getItem('sas_companies');
@@ -1145,7 +1162,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (isMounted) {
           if (uRes.status === 'fulfilled' && Array.isArray(uRes.value.data) && uRes.value.data.length > 0) {
             setUsers(uRes.value.data);
-            setCurrentUserState(prev => uRes.value.data.find(u => u.id === prev?.id) || uRes.value.data[0]);
+            const savedUserId = localStorage.getItem('sas_current_user_id');
+            setCurrentUserState(prev => {
+              const targetId = savedUserId || prev?.id;
+              const matched = uRes.value.data.find((u: User) => u.id === targetId);
+              if (matched) {
+                localStorage.setItem('sas_current_user', JSON.stringify(matched));
+                localStorage.setItem('sas_current_user_id', matched.id);
+                return matched;
+              }
+              return prev || uRes.value.data[0];
+            });
           }
           if (cRes.status === 'fulfilled' && Array.isArray(cRes.value.data) && cRes.value.data.length > 0) {
             setCompanies(cRes.value.data);
@@ -1230,11 +1257,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const res = await api.auth.login(identifier, password);
       if (res.data?.success && res.data.user) {
-        setCurrentUserState(res.data.user);
+        const u = res.data.user;
+        setCurrentUserState(u);
         setIsAuthenticated(true);
         localStorage.setItem('sas_is_authenticated', 'true');
+        localStorage.setItem('sas_current_user_id', u.id);
+        localStorage.setItem('sas_current_user', JSON.stringify(u));
         if (res.data.token) {
           localStorage.setItem('sas_auth_token', res.data.token);
+        }
+        if (u.role === 'Ramp/Loading Agent') {
+          setActiveTab('ramp_field');
+          localStorage.setItem('sas_active_tab', 'ramp_field');
+        } else if (u.role === 'Sorting Agent') {
+          setActiveTab('baggage');
+          localStorage.setItem('sas_active_tab', 'baggage');
+        } else {
+          setActiveTab('dashboard');
+          localStorage.setItem('sas_active_tab', 'dashboard');
         }
         return { success: true };
       }
@@ -1256,16 +1296,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUserState(matched);
         setIsAuthenticated(true);
         localStorage.setItem('sas_is_authenticated', 'true');
+        localStorage.setItem('sas_current_user_id', matched.id);
+        localStorage.setItem('sas_current_user', JSON.stringify(matched));
+        if (matched.role === 'Ramp/Loading Agent') {
+          setActiveTab('ramp_field');
+          localStorage.setItem('sas_active_tab', 'ramp_field');
+        } else if (matched.role === 'Sorting Agent') {
+          setActiveTab('baggage');
+          localStorage.setItem('sas_active_tab', 'baggage');
+        } else {
+          setActiveTab('dashboard');
+          localStorage.setItem('sas_active_tab', 'dashboard');
+        }
         return { success: true };
       }
       return { success: false, message: 'Invalid credentials. User not found.' };
     }
+    return { success: false, message: 'Authentication failed.' };
   };
 
   const logout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem('sas_is_authenticated');
     localStorage.removeItem('sas_auth_token');
+    localStorage.removeItem('sas_current_user');
+    localStorage.removeItem('sas_current_user_id');
+    localStorage.removeItem('sas_active_tab');
     if (currentUser) {
       api.auth.logout(currentUser.id).catch(() => {});
       logActivity('Security', 'AUTH_LOGOUT', currentUser.badgeId, `User logged out: ${currentUser.name}`, 'info');
@@ -1278,6 +1334,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const updated = { ...u, customPermissions };
         if (currentUser.id === userId) {
           setCurrentUserState(updated);
+          localStorage.setItem('sas_current_user', JSON.stringify(updated));
         }
         api.users.update(userId, { customPermissions }).catch(() => {});
         logActivity('Security', 'UPDATE', u.badgeId, `Administrator modified permissions for ${u.name} (${u.role})`, 'warning');
@@ -1328,6 +1385,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setCurrentUser = (user: User) => {
     setCurrentUserState(user);
+    localStorage.setItem('sas_current_user_id', user.id);
+    localStorage.setItem('sas_current_user', JSON.stringify(user));
     logActivity('Security', 'AUTH_LOGIN', user.badgeId, `User switched session to ${user.name} (${user.role})`, 'info');
     api.auth.switchUser(user.id).catch(() => {});
   };

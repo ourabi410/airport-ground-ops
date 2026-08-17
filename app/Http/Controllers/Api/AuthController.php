@@ -203,16 +203,38 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $users = DatabaseService::all('users');
-        $user = $users[0] ?? null;
+        $authHeader = $request->header('Authorization') ?? '';
+        $matchedUser = null;
 
-        if (!$user) {
+        if (str_starts_with($authHeader, 'Bearer_')) {
+            $raw = substr($authHeader, 7);
+            $decoded = base64_decode($raw);
+            $parts = explode(':', $decoded);
+            $userId = $parts[0] ?? null;
+            if ($userId) {
+                $matchedUser = DatabaseService::find('users', $userId);
+            }
+        }
+
+        if (!$matchedUser) {
+            $userId = $request->header('X-User-Id');
+            if ($userId) {
+                $matchedUser = DatabaseService::find('users', $userId);
+            }
+        }
+
+        if (!$matchedUser) {
+            $users = DatabaseService::all('users');
+            $matchedUser = $users[0] ?? null;
+        }
+
+        if (!$matchedUser) {
             return response()->json(['error' => 'No user logged in'], 401);
         }
 
         return response()->json([
-            'user' => $user,
-            'permissions' => self::getPermissions($user['role']),
+            'user' => $matchedUser,
+            'permissions' => self::getPermissions($matchedUser['role']),
         ]);
     }
 
