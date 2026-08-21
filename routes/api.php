@@ -46,9 +46,11 @@ Route::post('/baggages/scan/loading', [BaggageController::class, 'scanLoading'])
 Route::apiResource('dollies', DollyController::class);
 Route::post('/dollies/{id}/assign-bags', [DollyController::class, 'assignBags']);
 
-// Flight Ground Tasks & Checklists
+// Flight Ground Tasks & Checklists & Reminders
 Route::apiResource('tasks', TaskController::class);
 Route::post('/tasks/{id}/toggle-item', [TaskController::class, 'toggleChecklistItem']);
+Route::post('/tasks/{id}/send-reminder', [TaskController::class, 'sendReminder']);
+Route::post('/tasks/check-reminders', [TaskController::class, 'checkDueReminders']);
 
 // Turnaround Milestones & GPS Verification
 Route::apiResource('milestones', MilestoneController::class);

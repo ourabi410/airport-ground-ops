@@ -244,6 +244,11 @@ export interface FlightTaskItem {
   completedAt?: string;
   checklist: { id: string; text: string; done: boolean }[];
   notes?: string;
+  customerName?: string;
+  customerHub?: string;
+  standZone?: string;
+  gateNbr?: string;
+  lastReminderSentAt?: string;
 }
 
 export type AuditSeverity = 'info' | 'warning' | 'critical' | 'success';

@@ -97,7 +97,7 @@ export const api = {
     assignBags: (id: string, tagNumbers: string[]) => apiClient.post<Dolly>(`/dollies/${id}/assign-bags`, { tagNumbers }),
   },
 
-  // Tasks & Checklists
+  // Tasks & Checklists & Reminders
   tasks: {
     getAll: (params?: { flightNbr?: string; userId?: string }) => apiClient.get<FlightTaskItem[]>('/tasks', { params }),
     get: (id: string) => apiClient.get<FlightTaskItem>(`/tasks/${id}`),
@@ -105,6 +105,8 @@ export const api = {
     update: (id: string, data: Partial<FlightTaskItem>) => apiClient.put<FlightTaskItem>(`/tasks/${id}`, data),
     delete: (id: string) => apiClient.delete(`/tasks/${id}`),
     toggleItem: (id: string, checkId: string) => apiClient.post<FlightTaskItem>(`/tasks/${id}/toggle-item`, { checkId }),
+    sendReminder: (id: string, email?: string) => apiClient.post<{ success: boolean; message: string; recipient: string }>(`/tasks/${id}/send-reminder`, { email }),
+    checkReminders: (currentTime?: string, forceAll?: boolean) => apiClient.post<{ success: boolean; checkedTime: string; notifiedCount: number; tasks: any[] }>('/tasks/check-reminders', { currentTime, forceAll }),
   },
 
   // Turnaround Milestones & GPS Verification

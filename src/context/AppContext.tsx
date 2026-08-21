@@ -1056,6 +1056,8 @@ interface AppContextType {
   addTask: (task: Omit<FlightTaskItem, 'id' | 'completedAt'>) => void;
   updateTaskStatus: (taskId: string, status: FlightTaskItem['status']) => void;
   toggleTaskChecklist: (taskId: string, checklistId: string) => void;
+  sendTaskReminder: (taskId: string, email?: string) => Promise<{ success: boolean; message: string; recipient?: string }>;
+  checkTaskReminders: (forceAll?: boolean) => Promise<void>;
 
   // Audit Logging
   logActivity: (
@@ -1775,13 +1777,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCompany = (id: string, updates: Partial<Company>) => {
+    const oldCompany = companies.find(c => c.id === id);
+    const oldName = oldCompany?.name || '';
+    const newName = updates.name || oldName;
+    const newHub = updates.hub !== undefined ? updates.hub : (oldCompany?.hub || '');
+
     setCompanies(prev => prev.map(c => {
       if (c.id === id) {
-        logActivity('Company', 'UPDATE', c.name, `Company details updated for ${c.name}`, 'info');
+        logActivity('Company', 'UPDATE', c.name, `Company details and location hub (${newHub}) updated for ${c.name}`, 'info');
         return { ...c, ...updates };
       }
       return c;
     }));
+
+    // Dynamically cascade updated location / hub & company name to flights and tasks in real-time
+    setFlights(prev => prev.map(f => {
+      if (f.companyName === oldName || (f as any).companyId === id) {
+        return { ...f, companyName: newName, companyHub: newHub };
+      }
+      return f;
+    }));
+
+    setTasks(prev => prev.map(t => {
+      if (t.customerName === oldName || (t as any).companyId === id) {
+        return { ...t, customerName: newName, customerHub: newHub };
+      }
+      return t;
+    }));
+
     api.companies.update(id, updates).catch(() => {});
   };
 
@@ -1879,9 +1902,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Tasks
   const addTask = (newTaskData: Omit<FlightTaskItem, 'id' | 'completedAt'>) => {
+    const flight = flights.find(f => f.flightNbr === newTaskData.flightNbr);
+    const comp = companies.find(c => 
+      c.name === flight?.companyName || 
+      c.abbreviation === flight?.companyName || 
+      c.iata === flight?.companyName
+    );
+
     const newTask: FlightTaskItem = {
       ...newTaskData,
-      id: `TSK-${Date.now().toString().slice(-4)}`
+      id: `TSK-${Date.now().toString().slice(-4)}`,
+      customerName: comp?.name || flight?.companyName,
+      customerHub: comp?.hub,
+      standZone: flight?.subplaneAreaZone,
+      gateNbr: flight?.gateNbr
     };
     setTasks(prev => [newTask, ...prev]);
     logActivity('Tasks', 'CREATE', newTask.flightNbr, `New task created: "${newTask.taskTitle}" for Flight ${newTask.flightNbr}`, 'info');
@@ -1915,6 +1949,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return t;
     }));
     api.tasks.toggleItem(taskId, checklistId).catch(() => {});
+  };
+
+  const sendTaskReminder = async (taskId: string, email?: string): Promise<{ success: boolean; message: string; recipient?: string }> => {
+    try {
+      const res = await api.tasks.sendReminder(taskId, email);
+      if (res.data?.success) {
+        soundManager.playSuccessBeep();
+        const nowTime = new Date().toISOString().slice(11, 16);
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, lastReminderSentAt: nowTime } : t));
+        return {
+          success: true,
+          message: res.data.message || 'Reminder email dispatched successfully!',
+          recipient: res.data.recipient
+        };
+      }
+      return { success: false, message: 'Failed to send reminder email.' };
+    } catch (e: any) {
+      console.error('Error sending task reminder:', e);
+      return { success: false, message: e.response?.data?.message || 'Error communicating with mail server.' };
+    }
+  };
+
+  const checkTaskReminders = async (forceAll: boolean = false): Promise<void> => {
+    try {
+      const now = new Date();
+      const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const res = await api.tasks.checkReminders(currentHHMM, forceAll);
+      if (res.data?.success && res.data.notifiedCount > 0) {
+        soundManager.playLoadVerifiedBeep();
+        setTasks(prev => prev.map(t => {
+          if (t.targetTime === currentHHMM && t.status !== 'Completed') {
+            return { ...t, lastReminderSentAt: currentHHMM };
+          }
+          return t;
+        }));
+      }
+    } catch (e) {
+      console.warn('Task reminder check poll warning:', e);
+    }
   };
 
   // Turnaround Milestone Actions
@@ -2199,6 +2272,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  // Periodic background check for tasks reaching target time (e.g. 10:34)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkTaskReminders(false);
+    }, 30000); // Poll every 30s
+    return () => clearInterval(interval);
+  }, [tasks]);
+
   return (
     <AppContext.Provider
       value={{
@@ -2258,6 +2339,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTask,
         updateTaskStatus,
         toggleTaskChecklist,
+        sendTaskReminder,
+        checkTaskReminders,
         logActivity
       }}
     >

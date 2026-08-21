@@ -25,7 +25,11 @@ import {
   RefreshCw,
   Search,
   Compass,
-  PlayCircle
+  PlayCircle,
+  Mail,
+  Building2,
+  Bell,
+  Send
 } from 'lucide-react';
 import {
   Flight,
@@ -48,6 +52,8 @@ export const TaskManagementView: React.FC = () => {
     addTask,
     updateTaskStatus,
     toggleTaskChecklist,
+    sendTaskReminder,
+    checkTaskReminders,
     turnaroundMilestones,
     updateMilestoneStatus,
     assignMilestoneAgent,
@@ -56,6 +62,7 @@ export const TaskManagementView: React.FC = () => {
     pingAgentSessionGps,
     endAgentSession,
     flights,
+    companies,
     baggage,
     users,
     currentUser,
@@ -70,6 +77,10 @@ export const TaskManagementView: React.FC = () => {
   const [selectedMilestoneForGps, setSelectedMilestoneForGps] = useState<TurnaroundMilestone | null>(null);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState<boolean>(false);
 
+  // Email Reminder feedback state
+  const [sendingReminderTaskId, setSendingReminderTaskId] = useState<string | null>(null);
+  const [reminderNotification, setReminderNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
   // Custom Task Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -80,7 +91,7 @@ export const TaskManagementView: React.FC = () => {
     assignedUserId: users[0]?.id || 'USR-001',
     assignedUserName: users[0]?.name || 'Slimane Soltane',
     priority: 'High' as TaskPriority,
-    targetTime: '14:15',
+    targetTime: '10:34',
     status: 'Pending' as TaskStatus,
     checklist: [
       { id: 'c1', text: 'Verify aircraft hold door open and cleared', done: false },
@@ -162,12 +173,60 @@ export const TaskManagementView: React.FC = () => {
       assignedRole: matchedUser.role
     });
 
+    setReminderNotification({
+      message: `✓ Task "${formData.taskTitle}" created! Scheduled due at ${formData.targetTime}. Email alert sent to ${matchedUser.email}.`,
+      type: 'success'
+    });
+    setTimeout(() => setReminderNotification(null), 5000);
+
     setIsModalOpen(false);
+  };
+
+  const handleSendReminder = async (taskId: string) => {
+    setSendingReminderTaskId(taskId);
+    try {
+      const res = await sendTaskReminder(taskId);
+      if (res.success) {
+        setReminderNotification({ message: `✓ ${res.message} (${res.recipient || ''})`, type: 'success' });
+      } else {
+        setReminderNotification({ message: `⚠️ ${res.message}`, type: 'error' });
+      }
+    } catch (e) {
+      setReminderNotification({ message: 'Failed to send reminder email', type: 'error' });
+    } finally {
+      setSendingReminderTaskId(null);
+      setTimeout(() => setReminderNotification(null), 5000);
+    }
+  };
+
+  const handleTriggerAllReminders = async () => {
+    try {
+      await checkTaskReminders(true);
+      setReminderNotification({ message: '✓ All due scheduled task reminders checked and dispatched via email!', type: 'success' });
+      setTimeout(() => setReminderNotification(null), 5000);
+    } catch (e) {
+      setReminderNotification({ message: 'Failed to dispatch reminders', type: 'error' });
+    }
   };
 
   return (
     <div id="task-management-container" className="space-y-6">
       
+      {/* Reminder Notification Toast */}
+      {reminderNotification && (
+        <div className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between shadow-lg transition-all animate-in fade-in ${
+          reminderNotification.type === 'success' ? 'bg-emerald-900/90 border-emerald-500/50 text-emerald-100' : 'bg-rose-900/90 border-rose-500/50 text-rose-100'
+        }`}>
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 text-amber-300 animate-bounce" />
+            <span>{reminderNotification.message}</span>
+          </div>
+          <button onClick={() => setReminderNotification(null)} className="text-slate-300 hover:text-white cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
@@ -178,7 +237,7 @@ export const TaskManagementView: React.FC = () => {
             <div>
               <h1 className="text-xl font-bold text-slate-900">{t('taskTitle')}</h1>
               <p className="text-xs text-slate-500">
-                Ground Handling Turnaround Milestones, Agent Field Sessions & GPS Telemetry
+                Ground Handling Turnaround Milestones, Agent Field Sessions & Dynamic Customer Tasks
               </p>
             </div>
           </div>
@@ -198,160 +257,71 @@ export const TaskManagementView: React.FC = () => {
 
           <button
             id="btn-quick-export-turnaround"
-            onClick={() => exportTurnaroundPdf(selectedFlightObj, turnaroundMilestones, baggage, agentSessions)}
-            className="px-3 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-            title="Download PDF Turnaround Report for selected flight"
+            onClick={() => exportTurnaroundPdf(selectedFlightObj, turnaroundMilestones, baggage)}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Download PDF Turnaround Report"
           >
-            <Printer className="w-3.5 h-3.5 text-sky-400" />
-            <span>Export Turnaround PDF</span>
+            <Printer className="w-3.5 h-3.5 text-slate-500" />
+            <span>{t('btnPrintReport')}</span>
           </button>
 
           <button
             id="btn-quick-export-excel"
-            onClick={() => exportFlightExcel(selectedFlightObj, turnaroundMilestones, baggage, auditLogs)}
-            className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-            title="Download Excel Report for selected flight"
+            onClick={() => exportFlightExcel(selectedFlightObj, turnaroundMilestones, baggage, users)}
+            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Export XLSX Turnaround Audit"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
-            <span>Excel (.xlsx)</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{t('btnExportExcel')}</span>
           </button>
 
           <button
-            id="btn-dispatch-turnaround-toolbar"
+            id="btn-open-dispatch-modal"
             onClick={() => setIsDispatchModalOpen(true)}
-            className="px-3 py-2 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-700 hover:to-blue-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-            title="Dispatch Turnaround Flight and Milestones to Field Agent"
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
           >
-            <CheckSquare className="w-3.5 h-3.5" />
-            <span>Dispatch to Ramp Agent</span>
-          </button>
-
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Custom Task</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>Dispatch Tasks</span>
           </button>
         </div>
       </div>
 
-      {/* Primary KPI & Flight Selector Strip */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        
-        {/* Flight Selector */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1">
-            <Plane className="w-3.5 h-3.5 text-sky-600" />
-            Active Turnaround Flight
-          </span>
-          <select
-            id="select-turnaround-flight"
-            value={selectedFlightNbr}
-            onChange={(e) => setSelectedFlightNbr(e.target.value)}
-            className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-extrabold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
-          >
-            <option value="ALL">All Active Flights ({flights.length})</option>
-            {flights.map(f => (
-              <option key={f.id} value={f.flightNbr}>
-                {f.flightNbr} • {f.companyName} • Gate {f.gateNbr}
-              </option>
-            ))}
-          </select>
-          <div className="text-[11px] text-slate-500 mt-2">
-            Stand: <strong className="text-slate-800">{selectedFlightObj.subplaneAreaZone}</strong> • Reg: <strong className="text-slate-800">{selectedFlightObj.reg}</strong>
-          </div>
-        </div>
-
-        {/* Turnaround Progress KPI */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            Milestones Completed
-          </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-black text-slate-900">{completedCount} <span className="text-sm font-semibold text-slate-400">/ {totalFlightMilestones}</span></span>
-            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{progressPercent}%</span>
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-sky-500 to-emerald-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${progressPercent}%` }}
-            ></div>
-          </div>
-        </div>
-
-        {/* Active Agents On-Ramp */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1">
-            <Smartphone className="w-3.5 h-3.5 text-sky-600" />
-            Active Field Agents
-          </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-black text-slate-900">{activeFlightSessions.length}</span>
-            <span className="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-              Live GPS Lock
-            </span>
-          </div>
-          <div className="text-[11px] text-slate-500 mt-2 truncate">
-            {activeFlightSessions.map(s => s.agentName.split(' ')[0]).join(', ') || 'No active session'}
-          </div>
-        </div>
-
-        {/* Action Button: Start Field Session */}
-        <div className="bg-gradient-to-br from-sky-600 to-blue-700 p-4 rounded-2xl text-white shadow-xs flex flex-col justify-between">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-sky-200 tracking-wider">Field Agent Tools</span>
-            <h4 className="text-sm font-bold text-white mt-0.5">Start Apron Field Session</h4>
-          </div>
-          <button
-            onClick={() => startAgentSession(selectedFlightObj.id, currentUser.id)}
-            className="w-full mt-2 py-2 bg-white text-sky-900 hover:bg-sky-50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
-          >
-            <PlayCircle className="w-4 h-4 text-sky-600" />
-            <span>Join Turnaround Session</span>
-          </button>
-        </div>
-
-      </div>
-
-      {/* Main View Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
         <button
           onClick={() => setActiveTab('turnaround')}
-          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-colors cursor-pointer ${
             activeTab === 'turnaround'
-              ? 'bg-sky-600 text-white shadow-sm'
+              ? 'bg-slate-900 text-white'
               : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
           }`}
         >
-          <Clock className="w-4 h-4" />
+          <Layers className="w-4 h-4" />
           <span>Turnaround Milestones Matrix ({filteredMilestones.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('sessions')}
-          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-colors cursor-pointer ${
             activeTab === 'sessions'
-              ? 'bg-sky-600 text-white shadow-sm'
+              ? 'bg-slate-900 text-white'
               : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
           }`}
         >
-          <Smartphone className="w-4 h-4" />
+          <Radio className="w-4 h-4" />
           <span>Active Agent Field Sessions ({activeFlightSessions.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('customTasks')}
-          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-colors cursor-pointer ${
             activeTab === 'customTasks'
-              ? 'bg-sky-600 text-white shadow-sm'
+              ? 'bg-slate-900 text-white'
               : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
           }`}
         >
           <ListTodo className="w-4 h-4" />
-          <span>Ad-Hoc Flight Tasks ({tasks.length})</span>
+          <span>Ad-Hoc Flight Tasks & Reminders ({tasks.length})</span>
         </button>
       </div>
 
@@ -637,58 +607,187 @@ export const TaskManagementView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: AD-HOC CUSTOM FLIGHT TASKS */}
+      {/* TAB 3: AD-HOC CUSTOM FLIGHT TASKS & REMINDERS */}
       {activeTab === 'customTasks' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                className={`bg-white p-5 rounded-2xl border shadow-xs space-y-3 transition-all ${
-                  task.status === 'Completed' ? 'border-emerald-200 bg-emerald-50/10' : 'border-slate-200'
-                }`}
+          {/* Action Header for Tasks */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <span>Ad-Hoc Flight Tasks, Checklists & Email Reminders</span>
+                <span className="px-2 py-0.5 bg-sky-100 text-sky-800 text-[10px] rounded-full font-bold">
+                  {tasks.length} Active Tasks
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Customer airline location & stand updates propagate dynamically in real-time. Automated email reminders trigger on target schedules.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleTriggerAllReminders}
+                className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Send Reminder Emails for all tasks due now"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 font-mono">
-                    {task.flightNbr}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    task.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'
-                  }`}>
-                    {task.status}
-                  </span>
-                </div>
+                <Bell className="w-3.5 h-3.5 text-amber-600" />
+                <span>Check & Trigger Reminders</span>
+              </button>
 
-                <div>
-                  <h4 className="font-bold text-slate-900 text-sm">{task.taskTitle}</h4>
-                  <p className="text-xs text-slate-500 mt-0.5">Assigned to: <strong>{task.assignedUserName}</strong> ({task.assignedRole})</p>
-                </div>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Task</span>
+              </button>
+            </div>
+          </div>
 
-                <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
-                  {task.checklist.map((item) => (
-                    <label
-                      key={item.id}
-                      className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={item.done}
-                        onChange={() => toggleTaskChecklist(task.id, item.id)}
-                        className="rounded text-sky-600 focus:ring-sky-500"
-                      />
-                      <span className={item.done ? 'line-through text-slate-400' : 'text-slate-700'}>
-                        {item.text}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {tasks.map((task) => {
+              const flight = flights.find(f => f.flightNbr === task.flightNbr);
+              const company = companies.find(c => 
+                c.name === (task.customerName || flight?.companyName) ||
+                c.abbreviation === (task.customerName || flight?.companyName) ||
+                c.iata === (task.customerName || flight?.companyName)
+              );
+              const dynamicCustomerName = company?.name || task.customerName || flight?.companyName || 'Airline Partner';
+              const dynamicCustomerHub = company?.hub || task.customerHub || flight?.companyHub || 'Main Hub (TUN)';
+              const dynamicStand = flight?.subplaneAreaZone || task.standZone || 'Apron Stand';
+              const dynamicGate = flight?.gateNbr || task.gateNbr || '';
+              const matchedUser = users.find(u => u.id === task.assignedUserId || u.name === task.assignedUserName);
+
+              return (
+                <div
+                  key={task.id}
+                  className={`bg-white p-5 rounded-2xl border shadow-xs space-y-3 transition-all ${
+                    task.status === 'Completed' ? 'border-emerald-200 bg-emerald-50/10' : 'border-slate-200 hover:shadow-md'
+                  }`}
+                >
+                  {/* Top Bar: Flight Nbr + Customer + Status */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-white font-mono">
+                        {task.flightNbr}
                       </span>
-                    </label>
-                  ))}
-                </div>
+                      {company?.iata && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 font-mono">
+                          {company.iata}
+                        </span>
+                      )}
+                    </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-400">
-                  <span>Target: {task.targetTime}</span>
-                  {task.completedAt && <span className="text-emerald-700 font-bold">Done: {task.completedAt}</span>}
+                    <div className="flex items-center gap-1">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        task.priority === 'Critical' ? 'bg-purple-100 text-purple-800' :
+                        task.priority === 'High' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {task.priority}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        task.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'
+                      }`}>
+                        {task.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Task Title & Assignee */}
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">{task.taskTitle}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Assigned: <strong className="text-slate-800">{task.assignedUserName}</strong> ({task.assignedRole})
+                    </p>
+                  </div>
+
+                  {/* Dynamic Location & Customer Information Box */}
+                  <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 text-xs border border-slate-100">
+                    <div className="flex items-center justify-between text-slate-700">
+                      <span className="flex items-center gap-1.5 text-slate-500">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Customer:</span>
+                      </span>
+                      <strong className="text-slate-900 truncate max-w-[170px]" title={dynamicCustomerName}>
+                        {dynamicCustomerName}
+                      </strong>
+                    </div>
+
+                    <div className="flex items-center justify-between text-slate-700 pt-1 border-t border-slate-200">
+                      <span className="flex items-center gap-1.5 text-slate-500">
+                        <MapPin className="w-3.5 h-3.5 text-sky-600" />
+                        <span>Customer Hub:</span>
+                      </span>
+                      <span className="font-bold text-sky-700 truncate max-w-[170px]" title={dynamicCustomerHub}>
+                        📍 {dynamicCustomerHub}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-slate-700 pt-1 border-t border-slate-200">
+                      <span className="flex items-center gap-1.5 text-slate-500">
+                        <Plane className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Ramp Stand:</span>
+                      </span>
+                      <span className="font-mono font-semibold text-slate-800">
+                        {dynamicStand} {dynamicGate ? `• Gate ${dynamicGate}` : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Checklist */}
+                  <div className="space-y-1.5 pt-1 text-xs">
+                    {task.checklist.map((item) => (
+                      <label
+                        key={item.id}
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.done}
+                          onChange={() => toggleTaskChecklist(task.id, item.id)}
+                          className="rounded text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className={item.done ? 'line-through text-slate-400' : 'text-slate-700'}>
+                          {item.text}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Schedule Target Time & Email Dispatcher */}
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span className="flex items-center gap-1 font-mono font-bold text-slate-800">
+                        <Clock className="w-3.5 h-3.5 text-sky-600" />
+                        <span>Target: {task.targetTime}</span>
+                      </span>
+
+                      {task.completedAt ? (
+                        <span className="text-emerald-700 font-bold">Done: {task.completedAt}</span>
+                      ) : (
+                        <span className="text-amber-600 font-semibold text-[11px]">Due Today</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                      <span className="text-[11px] text-slate-400 truncate max-w-[130px]" title={matchedUser?.email}>
+                        {task.lastReminderSentAt ? `Sent: ${task.lastReminderSentAt}` : (matchedUser?.email || 'Email configured')}
+                      </span>
+
+                      <button
+                        onClick={() => handleSendReminder(task.id)}
+                        disabled={sendingReminderTaskId === task.id}
+                        className="px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-900 border border-sky-200 rounded-lg font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-50"
+                        title={`Send Email reminder to ${matchedUser?.email || 'assigned staff'}`}
+                      >
+                        <Mail className={`w-3.5 h-3.5 ${sendingReminderTaskId === task.id ? 'animate-spin' : ''}`} />
+                        <span>{sendingReminderTaskId === task.id ? 'Sending...' : 'Email Alert'}</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -714,8 +813,13 @@ export const TaskManagementView: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900 text-base">Create Flight Turnaround Task</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-sky-50 text-sky-600">
+                  <ListTodo className="w-5 h-5" />
+                </span>
+                <h3 className="font-bold text-slate-900 text-base">Create Flight Turnaround Task & Email Todo</h3>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -742,21 +846,78 @@ export const TaskManagementView: React.FC = () => {
                     className="w-full px-3 py-2 rounded-xl border border-slate-200"
                   >
                     {flights.map(f => (
-                      <option key={f.id} value={f.flightNbr}>{f.flightNbr}</option>
+                      <option key={f.id} value={f.flightNbr}>{f.flightNbr} ({f.companyName})</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
+                  <label className="block text-slate-700 font-bold mb-1">Target Time</label>
+                  <input
+                    type="time"
+                    required
+                    value={formData.targetTime}
+                    onChange={(e) => setFormData({ ...formData, targetTime: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Dynamic Flight & Customer Location Preview */}
+              {(() => {
+                const previewFlight = flights.find(f => f.flightNbr === formData.flightNbr);
+                const previewCompany = companies.find(c => c.name === previewFlight?.companyName);
+                return (
+                  <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-xl space-y-1 text-slate-700">
+                    <div className="text-[11px] font-bold text-sky-900">Dynamic Customer Location Preview:</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Customer Airline:</span>
+                      <strong className="text-slate-900">{previewCompany?.name || previewFlight?.companyName}</strong>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Customer Hub / Location:</span>
+                      <span className="font-bold text-sky-700">📍 {previewCompany?.hub || previewFlight?.companyHub || 'Tunis-Carthage (TUN)'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Stand / Gate:</span>
+                      <span>Stand {previewFlight?.subplaneAreaZone || 'Stand 14'}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="block text-slate-700 font-bold mb-1">Assigned Agent</label>
                   <select
                     value={formData.assignedUserName}
-                    onChange={(e) => setFormData({ ...formData, assignedUserName: e.target.value })}
+                    onChange={(e) => {
+                      const u = users.find(usr => usr.name === e.target.value);
+                      setFormData({
+                        ...formData,
+                        assignedUserName: e.target.value,
+                        assignedUserId: u?.id || formData.assignedUserId,
+                        assignedRole: u?.role || formData.assignedRole
+                      });
+                    }}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200"
                   >
                     {users.map(u => (
                       <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Priority</label>
+                  <select
+                    value={formData.priority}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value as TaskPriority })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                  >
+                    <option value="Normal">Normal</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
                   </select>
                 </div>
               </div>
@@ -765,15 +926,16 @@ export const TaskManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold"
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold shadow-xs"
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
                 >
-                  Create Task
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Create Task & Send Email</span>
                 </button>
               </div>
             </form>

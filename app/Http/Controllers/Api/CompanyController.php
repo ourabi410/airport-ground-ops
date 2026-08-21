@@ -56,9 +56,44 @@ class CompanyController extends Controller
 
     public function update(Request $request, string $id): JsonResponse
     {
+        $oldCompany = DatabaseService::find('companies', $id);
         $updated = DatabaseService::update('companies', $id, $request->all());
         if (!$updated) {
             return response()->json(['error' => 'Company not found'], 404);
+        }
+
+        // Cascade updated company details/hub/name to all associated flights and tasks
+        if ($oldCompany) {
+            $oldName = $oldCompany['name'] ?? '';
+            $newName = $updated['name'] ?? $oldName;
+            $newHub = $updated['hub'] ?? ($oldCompany['hub'] ?? '');
+
+            $flights = DatabaseService::all('flights');
+            $modifiedFlights = false;
+            foreach ($flights as &$flight) {
+                if (($flight['companyName'] ?? '') === $oldName || ($flight['companyId'] ?? '') === $id) {
+                    $flight['companyName'] = $newName;
+                    $flight['companyHub'] = $newHub;
+                    $modifiedFlights = true;
+                }
+            }
+            if ($modifiedFlights) {
+                DatabaseService::saveAll('flights', $flights);
+            }
+
+            // Also update tasks related to this company or its flights
+            $tasks = DatabaseService::all('tasks');
+            $modifiedTasks = false;
+            foreach ($tasks as &$task) {
+                if (($task['companyName'] ?? '') === $oldName || ($task['companyId'] ?? '') === $id) {
+                    $task['companyName'] = $newName;
+                    $task['companyHub'] = $newHub;
+                    $modifiedTasks = true;
+                }
+            }
+            if ($modifiedTasks) {
+                DatabaseService::saveAll('tasks', $tasks);
+            }
         }
 
         DatabaseService::insert('audit_logs', [
@@ -69,7 +104,7 @@ class CompanyController extends Controller
             'module' => 'Company',
             'actionType' => 'UPDATE',
             'entityId' => $id,
-            'details' => "Updated airline contract details for {$updated['name']}",
+            'details' => "Updated airline customer contract & location ({$updated['hub']}) for {$updated['name']}",
             'severity' => 'info',
             'device' => 'AeroTurn Terminal',
         ]);
